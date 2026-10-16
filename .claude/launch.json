@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "ui-preview", "runtimeExecutable": "npx", "runtimeArgs": ["next", "start", "-p", "5998"], "port": 5998 }
+  ]
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 초록 둥근 사각형 + 흰 펜 끝(글쓰기) + 노란 재생 점(숏폼) -->
+  <rect width="64" height="64" rx="16" fill="#00c73c"/>
+  <path d="M19 45 L22 34 L38 18 a4 4 0 0 1 5.7 0 l2.3 2.3 a4 4 0 0 1 0 5.7 L30 42 Z" fill="#fff"/>
+  <path d="M22 34 L30 42" stroke="#00c73c" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="45" cy="45" r="8" fill="#ffe600"/>
+  <path d="M42.5 41.2 L49 45 L42.5 48.8 Z" fill="#17201b"/>
+</svg>

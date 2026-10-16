@@ -1,0 +1,20 @@
+{
+  "name": "bloghelper",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "start": "node server.mjs",
+    "dev": "node server.mjs --dev",
+    "check": "node --check server.mjs && node --check naver.mjs && node --check ai.mjs && node --check video.mjs && node video.check.mjs && node --check shortents.mjs && node shortents.check.mjs"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "next": "^16.4.0",
+    "node-edge-tts": "^1.2.11",
+    "playwright-core": "^1.48.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

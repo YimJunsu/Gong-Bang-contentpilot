@@ -1,0 +1,13 @@
+# 개인 데이터 — 절대 올리지 않는다 (네이버 로그인 프로필·작업 기록·개인 설정)
+config.json
+data/
+
+# 빌드·의존성
+node_modules/
+.next/
+
+# 로컬 도구 상태
+.bkit/
+.claude/settings.local.json
+*.log
+_*.mjs

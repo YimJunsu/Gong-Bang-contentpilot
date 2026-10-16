@@ -1,0 +1,23 @@
+{
+  "port": 5999,
+  "blogRoot": "",
+  "blogId": "",
+  "engine": "codex",
+  "headless": true,
+  "chromePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "shortentsIntervalMin": 30,
+  "tts": {
+    "provider": "edge",
+    "voice": "ko-KR-SunHiNeural",
+    "rate": "+10%",
+    "googleApiKey": "",
+    "googleVoice": "ko-KR-Neural2-A",
+    "elevenApiKey": "",
+    "elevenVoiceId": "pNInz6obpgDQGcFmaJgB",
+    "elevenModel": "eleven_v3"
+  },
+  "engines": {
+    "codex": ["codex", "exec", "--ephemeral", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-C", "{cwd}", "-"],
+    "claude": ["claude", "-p", "--no-session-persistence", "--dangerously-skip-permissions"]
+  }
+}
