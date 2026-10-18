@@ -159,6 +159,50 @@
     throw new Error(`UPLOAD_FAILED:${fileName}`);
   }
 
+  // 링크 카드·동영상: 주소 글자를 붙여넣으면 SE ONE이 미리보기 카드(oglink)나 동영상(oembed)을 만든다.
+  // 이미지 업로드와 같은 방식 — 새로 생긴 컴포넌트를 id 차집합으로 찾아 그대로 돌려준다. 본문은 APPLY 때 통째로 바뀐다
+  const LINK_TYPES = ['oglink', 'oembed', 'video'];
+  function pasteText(text) {
+    const target = virtualEditable();
+    const view = target.ownerDocument?.defaultView || window;
+    target.focus();
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', text);
+    const Clipboard = view.ClipboardEvent || ClipboardEvent;
+    target.dispatchEvent(new Clipboard('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
+  }
+  async function allComponents(editor) {
+    const data = await editor.getDocumentData();
+    const slot = findComponentsSlot(data);
+    return slot ? slot.owner[slot.key] : [];
+  }
+  async function pasteLink({ url }) {
+    if (!/^https?:\/\//i.test(String(url || ''))) throw new Error('LINK_URL_INVALID');
+    const editor = getEditor();
+    const beforeIds = new Set((await allComponents(editor)).map((component) => component.id));
+    // 카드를 막 만든 직후에 붙여넣으면 카드 대신 글자로 들어갈 때가 있다(2026-10-18 실측: 두 번째 붙여넣기만 실패).
+    // 글자로 들어가면 한 번 더 붙여넣는다. 남은 글자는 APPLY 때 본문이 통째로 바뀌면서 사라진다
+    let created = null;
+    for (let attempt = 0; attempt < 3 && !created; attempt += 1) {
+      pasteText(url);
+      created = await pollFor(attempt ? 12000 : 20000, async () => {
+        const list = await allComponents(editor);
+        return list.find((component) => !beforeIds.has(component.id) && LINK_TYPES.includes(componentType(component))) || null;
+      });
+    }
+    if (!created) {
+      const fresh = (await allComponents(editor)).filter((component) => !beforeIds.has(component.id)).map(componentType);
+      throw new Error(`LINK_NOT_CREATED:${url} (새로 생긴 것: ${fresh.join(',') || '없음'})`);
+    }
+    // 카드 내용(제목·썸네일)이 채워질 때까지 잠깐 더 기다린다
+    const filled = await pollFor(10000, async () => {
+      const list = await allComponents(editor);
+      const target = list.find((component) => component.id === created.id);
+      return target && (target.title || target.thumbnail || target.html || target.inputUrl || target.videoId) ? target : null;
+    });
+    return JSON.parse(JSON.stringify(filled || created));
+  }
+
   // 장소 레이어는 지연 로드라 한 번도 연 적이 없으면 $service가 없다.
   async function placePlugin() {
     const editor = getEditor();
@@ -283,6 +327,7 @@
     CLEAR: async () => { await replaceBody([emptyText()]); return { cleared: true }; },
     UPLOAD_IMAGE: uploadImage,
     INSERT_PLACE: insertPlace,
+    PASTE_LINK: pasteLink,
     APPLY: applyDocument
   };
 

@@ -1,4 +1,4 @@
-// 네이버 쪽 작업 전부. 전용 크롬 프로필 하나를 백그라운드(headless)로 띄워 쓴다.
+// 네이버 쪽 작업 전부. 네이버 계정마다 전용 크롬 프로필(data/ 아래 폴더)을 하나씩 두고 백그라운드(headless)로 띄워 쓴다.
 // 로그인은 처음 한 번만 창을 띄워 사람이 직접 한다 — 비밀번호를 코드가 다루지 않는다.
 import { chromium } from 'playwright-core';
 import fs from 'node:fs/promises';
@@ -6,56 +6,67 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PROFILE = path.join(HERE, 'data', 'chrome-profile');
+const DATA = path.join(HERE, 'data');
+// profile = data/ 아래 폴더 이름 (계정의 profile 값). 밖으로 나가는 경로는 막는다
+export function profileDir(profile) {
+  const dir = path.resolve(DATA, String(profile || ''));
+  const rel = path.relative(DATA, dir);
+  if (!profile || !rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('프로필 경로가 잘못됐습니다');
+  return dir;
+}
 const VENDOR = { html: path.join(HERE, 'vendor', 'html.js'), driver: path.join(HERE, 'vendor', 'driver.js') };
 const MIME = { '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif' };
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
-// 프로필은 한 프로세스만 열 수 있다 → 모든 브라우저 작업을 한 줄로 세운다.
+// 프로필은 한 프로세스만 열 수 있다 → 모든 브라우저 작업을 한 줄로 세운다. 다른 계정 프로필이 오면 닫고 다시 연다.
 let queue = Promise.resolve();
 let ctx = null;
 let ctxHeadless = null;
+let ctxProfile = null;
 let idleTimer = null;
 // 네이버 로그인 쿠키(NID_SES 등)는 '로그인 상태 유지'를 안 켜면 세션 쿠키라 크롬을 닫으면 사라진다.
 // 창을 닫았다 다시 열 때(로그인 창 → headless, 5분 쉬고 재시작) 메모리로 넘겨 준다. 디스크에는 안 쓴다.
 // ponytail: 서버를 재시작하면 사라진다 — 그때는 '로그인 상태 유지'를 켜고 로그인하면 된다.
-let carried = [];
+const carried = new Map(); // 프로필 → 세션 쿠키
 async function closeCtx() {
   if (!ctx) return;
   const c = ctx; ctx = null;
-  carried = (await c.cookies().catch(() => [])).filter((k) => k.expires === -1 && /naver\.com$/.test(k.domain));
+  carried.set(ctxProfile, (await c.cookies().catch(() => [])).filter((k) => k.expires === -1 && /naver\.com$/.test(k.domain)));
   await c.close().catch(() => {});
 }
 const exclusive = (job) => { const run = queue.then(job, job); queue = run.catch(() => {}); return run; };
+// 계정을 지우기 전에: 그 프로필이 열려 있으면 닫고, 넘겨 줄 쿠키도 버린다
+export const forget = (profile) => exclusive(async () => { if (ctx && ctxProfile === profile) await closeCtx(); carried.delete(profile); });
 
-async function context(config, headless = config.headless !== false) {
+async function context(config, profile, headless = config.headless !== false) {
   clearTimeout(idleTimer);
-  if (ctx && ctxHeadless !== headless) await closeCtx();
+  if (ctx && (ctxHeadless !== headless || ctxProfile !== profile)) await closeCtx();
   if (!ctx) {
-    ctx = await chromium.launchPersistentContext(PROFILE, {
+    ctx = await chromium.launchPersistentContext(profileDir(profile), {
       executablePath: config.chromePath, headless, viewport: { width: 1280, height: 900 },
       args: ['--disable-blink-features=AutomationControlled'], locale: 'ko-KR'
     });
     ctxHeadless = headless;
+    ctxProfile = profile;
     const mine = ctx;
     mine.on('close', () => { if (ctx === mine) ctx = null; });
-    if (carried.length) await ctx.addCookies(carried).catch(() => {});
+    if (carried.get(profile)?.length) await ctx.addCookies(carried.get(profile)).catch(() => {});
   }
   return ctx;
 }
 // ponytail: 5분 쉬면 닫는다. 상시 띄워 둘 필요가 생기면 타이머를 빼면 된다.
 const release = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => exclusive(closeCtx), 300_000); };
 
-async function withPage(config, work, headless) {
+async function withPage(config, profile, work, headless) {
   return exclusive(async () => {
-    const page = await (await context(config, headless)).newPage();
+    const page = await (await context(config, profile, headless)).newPage();
     try { return await work(page); } finally { await page.close().catch(() => {}); release(); }
   });
 }
 
 // ---- 세션 ----
-export async function session(config) {
-  return withPage(config, async (page) => {
+export async function session(config, profile) {
+  return withPage(config, profile, async (page) => {
     const cookies = await page.context().cookies('https://nid.naver.com');
     const loggedIn = cookies.some((c) => c.name === 'NID_AUT') && cookies.some((c) => c.name === 'NID_SES');
     if (!loggedIn) return { loggedIn: false };
@@ -67,9 +78,9 @@ export async function session(config) {
 }
 
 // 창을 띄우고 사람이 로그인할 때까지(최대 5분) 쿠키를 지켜본다.
-export async function login(config) {
+export async function login(config, profile) {
   return exclusive(async () => {
-    const page = await (await context(config, false)).newPage();
+    const page = await (await context(config, profile, false)).newPage();
     await page.goto('https://nid.naver.com/nidlogin.login?url=https%3A%2F%2Fblog.naver.com%2F');
     const deadline = Date.now() + 300_000;
     try {
@@ -93,8 +104,8 @@ export async function login(config) {
 // 화면이 직접 부르는 /api/v6/trend/category 응답을 받아 쓴다. 이 API는 화면 JS가 서명 헤더를 붙여야 해서
 // 따로 부를 수 없다 → 화면을 열고, 주제를 3개씩 보여 주는 슬라이드를 넘겨 나머지 주제도 불러오게 한다.
 // rankChange: 0 = 변동 없음, 양수 = 오름, 음수 = 내림, null = 새로 등장
-export async function hotKeywords(config) {
-  return withPage(config, async (page) => {
+export async function hotKeywords(config, profile) {
+  return withPage(config, profile, async (page) => {
     const got = new Map();
     let date = '';
     page.on('response', async (r) => {
@@ -105,7 +116,7 @@ export async function hotKeywords(config) {
     });
     await page.goto('https://creator-advisor.naver.com/', { waitUntil: 'networkidle', timeout: 45_000 }).catch(() => {});
     const home = page.url().match(/^(https:\/\/creator-advisor\.naver\.com\/naver_blog\/[^/?#]+)/)?.[1];
-    if (!home) throw new Error('어드바이저에 들어가지 못했습니다 — 대시보드에서 네이버 로그인을 먼저 해 주세요');
+    if (!home) throw new Error('어드바이저에 들어가지 못했습니다 — 설정 → 계정 관리에서 기본 네이버 계정에 로그인해 주세요');
     await page.goto(`${home}/trends`, { waitUntil: 'networkidle', timeout: 45_000 }).catch(() => {});
     const swiper = '.u_ni_search_swiper';
     await page.locator(swiper).first().scrollIntoViewIfNeeded({ timeout: 15_000 }).catch(() => {});
@@ -126,16 +137,75 @@ export async function hotKeywords(config) {
   });
 }
 
-// ---- 화면 읽기 (리워드·숏텐츠) ----
-export async function scrape(config, url, waitMs = 4000) {
-  return withPage(config, async (page) => {
+// ---- 화면 읽기 (리워드·숏텐츠). 로그인이 필요 없어서 기본 계정 프로필을 쓴다 ----
+// withImages: 글에 쓸 만한 이미지 후보(대표 이미지 og:image + 화면의 큰 이미지)도 모은다. 쓸지 말지는 AI가 이미지 규칙으로 판단한다
+export async function scrape(config, profile, url, waitMs = 4000, { withImages = false } = {}) {
+  return withPage(config, profile, async (page) => {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     await sleep(waitMs);
     const text = await page.evaluate(() => document.body.innerText);
     const links = await page.evaluate(() => [...document.querySelectorAll('a[href]')]
       .map((a) => ({ text: a.innerText.trim().slice(0, 60), href: a.href })).filter((l) => l.text));
-    return { url: page.url(), title: await page.title(), text, links };
+    let images = [];
+    if (withImages) {
+      // 스크롤해야 불러오는 이미지가 많다 → 몇 화면 내려 본 뒤 모은다
+      for (let i = 0; i < 6; i += 1) { await page.evaluate(() => window.scrollBy(0, window.innerHeight)); await sleep(350); }
+      images = await page.evaluate(() => {
+        const abs = (u) => { try { return new URL(u, location.href).href; } catch { return ''; } };
+        const meta = (sel) => document.querySelector(sel)?.content || '';
+        const out = [];
+        const og = meta('meta[property="og:image"]') || meta('meta[name="twitter:image"]');
+        if (og) out.push({ src: abs(og), note: `대표 이미지 · ${meta('meta[property="og:title"]') || document.title}`.slice(0, 100) });
+        for (const img of document.images) {
+          const src = abs(img.currentSrc || img.src);
+          if (img.naturalWidth < 400 || img.naturalHeight < 250 || !/^https?:/.test(src)) continue;
+          if (/logo|icon|sprite|banner|badge|avatar|profile|tracking|pixel|\/ads?\//i.test(src)) continue;
+          const caption = img.closest('figure')?.querySelector('figcaption')?.innerText || img.alt || img.title || '';
+          out.push({ src, note: `${img.naturalWidth}×${img.naturalHeight}${caption.trim() ? ` · ${caption.trim().slice(0, 80)}` : ''}` });
+        }
+        const seen = new Set();
+        return out.filter((x) => !seen.has(x.src) && seen.add(x.src)).slice(0, 12);
+      });
+    }
+    return { url: page.url(), title: await page.title(), text, links, images };
+  });
+}
+
+// ---- 공식 유튜브 영상 장면 캡처 (설정에서 켰을 때만, 서버 /api/youtube/frames가 부른다) ----
+// 영상 파일은 받지 않는다. 브라우저로 영상 페이지를 열어 지정 시점으로 넘긴 뒤 플레이어 화면만 PNG로 찍는다.
+// 플레이어 위 글자·버튼은 숨기고, 광고가 붙으면 끝날 때까지 기다린다(건너뛰기가 보이면 누른다).
+const PLAYER_CLEAN = '.ytp-chrome-top,.ytp-chrome-bottom,.ytp-gradient-top,.ytp-gradient-bottom,.ytp-ce-element,.ytp-pause-overlay,.ytp-paid-content-overlay,.ytp-spinner,.ytp-cued-thumbnail-overlay,.ytp-large-play-button,.ytp-watermark,.iv-branding,.ytp-autonav-endscreen-countdown-overlay,.ytp-tooltip,.ytp-cards-button,.ytp-cards-teaser,.ytp-iv-player-content,.ytp-overlay-top-right,.ytp-player-content{display:none!important}';
+export async function youtubeFrames(config, profile, videoId, seconds, outDir, name = (s) => `영상화면_${s}.png`) {
+  return withPage(config, profile, async (page) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.goto(`https://www.youtube.com/watch?v=${videoId}`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    await page.waitForSelector('#movie_player video', { timeout: 30_000 });
+    await page.addStyleTag({ content: PLAYER_CLEAN });
+    const frames = [];
+    for (const sec of seconds) {
+      for (let i = 0; i < 90; i += 1) {
+        const ad = await page.evaluate(() => document.querySelector('#movie_player')?.classList.contains('ad-showing'));
+        if (!ad) break;
+        await page.locator('.ytp-skip-ad-button, .ytp-ad-skip-button-modern').first().click({ timeout: 500 }).catch(() => {});
+        await sleep(500);
+      }
+      const at = await page.evaluate(async (t) => {
+        const v = document.querySelector('#movie_player video');
+        v.muted = true;
+        await v.play().catch(() => {});
+        v.pause();
+        if (Number.isFinite(v.duration) && t > v.duration) return null; // 영상보다 긴 시점
+        await new Promise((done) => { const end = () => { v.removeEventListener('seeked', end); done(); }; v.addEventListener('seeked', end); v.currentTime = t; setTimeout(done, 8000); });
+        return Math.round(v.currentTime);
+      }, sec);
+      if (at == null) { frames.push({ at: sec, error: '영상 길이를 넘는 시점' }); continue; }
+      await sleep(800);
+      const file = path.join(outDir, name(sec));
+      await page.locator('#movie_player video').screenshot({ path: file });
+      frames.push({ at, file });
+    }
+    return frames;
   });
 }
 
@@ -213,21 +283,34 @@ async function injectInFrame({ html, images, title, center }) {
   if (article.hasPlaceSlot) {
     try { place = (await call('INSERT_PLACE', { placeId: article.placeId, name: article.placeName }, 60000)).component; } catch (error) { logs.push(`장소 건너뜀: ${error.message}`); }
   }
-  let components = Html.fillImages(article.components, uploaded, place);
+  // 링크 카드·동영상: 주소를 붙여넣어 네이버가 만든 컴포넌트로 바꾼다
+  const embedded = new Map();
+  const createdIds = [];
+  for (const { url, kind } of article.embeds || []) {
+    if (embedded.has(url)) continue;
+    try {
+      const component = await call('PASTE_LINK', { url }, 40000);
+      embedded.set(url, component);
+      if (component.id) createdIds.push(component.id);
+      logs.push(`${kind === 'video' ? '동영상' : '링크 카드'}: ${url}`);
+    } catch (error) { logs.push(`${kind === 'video' ? '동영상' : '링크 카드'} 실패(주소 글자로 남김): ${url} ${error.message}`); }
+  }
+  let components = Html.fillImages(article.components, uploaded, place, embedded);
   if (center) components = Html.centerParagraphs(components);
-  const uploadedIds = [...uploaded.values()].map((c) => c.id).filter(Boolean);
+  const uploadedIds = [...[...uploaded.values()].map((c) => c.id), ...createdIds].filter(Boolean);
   const result = await call('APPLY', { components, title: title || article.title, keepExisting: false, skipTitleIfPresent: false, uploadedIds }, 60000);
-  return { logs, components: result.components, images: `${uploaded.size}/${article.images.length}`, chars: article.stats.characters };
+  return { logs, components: result.components, images: `${uploaded.size}/${article.images.length}`, embeds: `${embedded.size}/${(article.embeds || []).length}`, chars: article.stats.characters };
 }
 
-export async function saveDraft(config, postDir, log = () => {}) {
-  if (!config.blogId) throw new Error('blogId가 없습니다. 대시보드에서 세션 확인을 먼저 하세요.');
+// account = 설정의 네이버 계정 { name, profile, blogId }
+export async function saveDraft(config, account, postDir, log = () => {}) {
+  if (!account?.blogId) throw new Error(`${account?.name || '네이버 계정'}의 블로그 아이디가 없습니다. 설정 → 계정 관리에서 세션 확인을 하거나 직접 적어 주세요.`);
   const post = await readPost(postDir);
   const [htmlJs, driverJs] = await Promise.all([fs.readFile(VENDOR.html, 'utf8'), fs.readFile(VENDOR.driver, 'utf8')]);
-  return withPage(config, async (page) => {
+  return withPage(config, account.profile, async (page) => {
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
-    await page.goto(`https://blog.naver.com/${config.blogId}?Redirect=Write`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    if (/nid\.naver\.com/.test(page.url())) throw new Error('로그인이 풀렸습니다. 대시보드에서 다시 로그인하세요.');
+    await page.goto(`https://blog.naver.com/${account.blogId}?Redirect=Write`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    if (/nid\.naver\.com/.test(page.url())) throw new Error(`${account.name} 로그인이 풀렸습니다. 설정 → 계정 관리에서 다시 로그인하세요.`);
     // SmartEditor가 올라온 프레임을 찾는다 (보통 #mainFrame)
     let frame = null;
     for (let i = 0; i < 60 && !frame; i += 1) {
@@ -246,7 +329,7 @@ export async function saveDraft(config, postDir, log = () => {}) {
       html: post.html, images: post.images, title: post.meta.title, center: post.meta.category_code === 'B'
     });
     result.logs.forEach((line) => log(line));
-    log(`주입 완료 · 컴포넌트 ${result.components}개 · 이미지 ${result.images} · ${result.chars}자`);
+    log(`주입 완료 · 컴포넌트 ${result.components}개 · 이미지 ${result.images}${result.embeds !== '0/0' ? ` · 링크·영상 ${result.embeds}` : ''} · ${result.chars}자`);
     await sleep(1500);
     // 임시저장 = 상단 "저장" 버튼 (발행 아님)
     const save = frame.locator('button').filter({ hasText: /^\s*저장\s*$/ }).first();

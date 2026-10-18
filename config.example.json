@@ -1,7 +1,6 @@
 {
   "port": 5999,
   "blogRoot": "",
-  "blogId": "",
   "engine": "codex",
   "headless": true,
   "chromePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",

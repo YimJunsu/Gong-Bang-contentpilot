@@ -284,6 +284,13 @@
         components.push(textComponent([paragraph([textNode(line, tagStyle)], tagStyle, alignOf(element))]));
         return;
       }
+      // 링크 카드·동영상: <div class="oglink" data-url="…"> / <div class="embed" data-url="유튜브 주소">.
+      // 에디터에 주소를 붙여넣으면 네이버가 진짜 카드·영상을 만든다(driver PASTE_LINK) — 여기서는 자리만 잡는다
+      if ((cls.contains('oglink') || cls.contains('embed')) && element.getAttribute('data-url')) {
+        flush();
+        components.push({ __nbhLink: true, url: element.getAttribute('data-url').trim(), kind: cls.contains('embed') ? 'video' : 'oglink' });
+        return;
+      }
       if (cls.contains('place')) {
         flush();
         placeName = element.getAttribute('data-place-name') || placeName;
@@ -352,6 +359,7 @@
     return {
       ok: true, title, components, images, tables, tags, stats,
       placeId, placeName, hasPlaceSlot: components.some((c) => c.__nbhPlace),
+      embeds: components.filter((c) => c.__nbhLink).map(({ url, kind }) => ({ url, kind })),
       firstParagraph: firstParagraphText(components), body
     };
   }
@@ -378,9 +386,14 @@
   }
 
   // 자리표시자를 네이버가 업로드해준 진짜 image 컴포넌트로 바꾼다.
-  function fillImages(components, uploaded, placeComponent = null) {
+  // embedded: 주소 → 네이버가 만든 링크 카드·동영상 컴포넌트. 못 만들었으면 주소를 글자로 남긴다
+  function fillImages(components, uploaded, placeComponent = null, embedded = new Map()) {
     return components.flatMap((component) => {
       if (component.__nbhPlace) return placeComponent ? [placeComponent] : [];
+      if (component.__nbhLink) {
+        const real = embedded.get(component.url);
+        return real ? [real] : [textComponent([paragraph([textNode(component.url, BODY)], BODY)])];
+      }
       if (!component.__nbhImage) return [component];
       const real = uploaded.get(component.token);
       // 업로드 못 한 이미지는 자리표시 문단으로 남긴다 (본문이 통째로 실패하지 않게)

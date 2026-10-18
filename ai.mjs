@@ -13,6 +13,8 @@ import path from 'node:path';
 // 규칙 파일을 깨진 채 읽지 않도록 매번 알려 준다.
 const ENCODING_NOTE = '\n\n(실행 환경: Windows. 파일은 항상 UTF-8로 읽고 쓴다. PowerShell의 Get-Content·Set-Content에는 -Encoding UTF8을 붙인다.)';
 
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
+
 export function runAI(config, engine, prompt, { cwd, log = () => {}, signal } = {}) {
   const template = config.engines?.[engine];
   if (!template) return Promise.reject(new Error(`엔진 설정 없음: ${engine}`));
@@ -23,6 +25,8 @@ export function runAI(config, engine, prompt, { cwd, log = () => {}, signal } = 
     const stdinAt = args.lastIndexOf('-');
     args.splice(stdinAt >= 0 ? stdinAt : args.length, 0, '-o', `"${lastFile}"`);
   }
+  // 생각 깊이(설정 → AI). 비우면 codex 자체 설정(~/.codex/config.toml)을 따른다. 깊을수록 꼼꼼하지만 오래 걸린다
+  if (isCodex && EFFORTS.includes(config.codexEffort)) args.unshift('-c', `model_reasoning_effort=${config.codexEffort}`);
   return new Promise((resolve, reject) => {
     // shell: npm 전역 설치(codex.cmd)를 찾으려면 필요하다. 인자는 설정에 고정된 플래그와 우리가 만든 임시 파일 경로뿐이다.
     const env = { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }; // AI가 돌리는 파이썬 출력이 깨지지 않게
