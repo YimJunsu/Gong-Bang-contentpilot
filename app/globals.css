@@ -47,6 +47,7 @@ main { padding: 36px 44px 64px; } /* 넓은 화면에서도 오른쪽 끝까지 
 .dot.wait { background: var(--blue); animation: blink 1s ease-in-out infinite; }
 @keyframes blink { 50% { opacity: .3; } }
 .side-menu { margin-bottom: 18px; }
+.topbar { display: none; } /* 휴대폰 폭에서만 보이는 위쪽 막대(☰) */
 
 /* ---- 페이지 머리: 큰 3D 이모지 + 굵은 제목 (이 화면의 유일한 '큰 목소리') ---- */
 .head { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
@@ -125,14 +126,19 @@ video.preview { width: 100%; aspect-ratio: 9 / 16; background: var(--ink); borde
 .note { padding: 10px 14px; border-radius: 10px; background: var(--ground); font-size: 13.5px; }
 
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; }
-  .side { position: static; height: auto; display: flex; gap: 4px; overflow-x: auto; padding: 10px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .brand, .group { display: none; }
-  .side { flex-direction: row; }
-  .side-menu, .side-menu > div { display: contents; } /* 그룹 묶음을 풀어 메뉴를 한 줄로 */
-  .side-foot { margin: 0 0 0 auto; width: auto; flex: none; padding: 6px 10px; white-space: nowrap; }
-  .side-foot small { display: none; }
-  .nav { width: auto; white-space: nowrap; }
+  /* 1fr이면 본문이 안쪽 가장 긴 줄(분류 버튼 묶음)만큼 넓어진다.
+     줄 높이를 정하지 않으면 본문이 짧은 순간(데이터 받기 전) 남는 높이를 위쪽 막대가 나눠 가져 늘어났다 돌아온다 (2026-10-20) */
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  /* 사이드바는 왼쪽에서 밀려 나오는 서랍. 닫혀 있을 땐 visibility로 숨겨 Tab 키로도 못 들어간다 */
+  .side { position: fixed; inset: 0 auto 0 0; z-index: 900; width: min(300px, 86vw); height: 100dvh; transform: translateX(-100%); visibility: hidden;
+    transition: transform .24s cubic-bezier(.2, .7, .3, 1), visibility 0s .24s; }
+  .side.open { transform: none; visibility: visible; transition: transform .24s cubic-bezier(.2, .7, .3, 1); box-shadow: 0 24px 60px rgba(23, 32, 27, .28); }
+  .side-dim { position: fixed; inset: 0; z-index: 899; background: rgba(23, 32, 27, .45); animation: fade-in .2s ease; }
+  html:has(.side.open) { overflow: hidden; } /* 서랍이 열린 동안 뒤 화면이 같이 스크롤되지 않게 */
+  .topbar { display: flex; align-items: center; gap: 6px; position: sticky; top: 0; z-index: 50; height: 56px; padding: 0 12px 0 6px; background: var(--paper); border-bottom: 1px solid var(--line); }
+  .topbar b { flex: 1; min-width: 0; font-size: 16px; font-weight: 800; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu-btn { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none; color: var(--ink); cursor: pointer; }
+  .menu-btn:hover { background: var(--ground); }
   main { padding: 22px 16px 48px; }
   .head h1 { font-size: 26px; }
   .strip { grid-template-columns: 1fr; }
@@ -266,3 +272,43 @@ tr.logrow pre.log { overflow-wrap: anywhere; word-break: break-word; }
 .preview-frame { display: flex; justify-content: center; background: var(--ground); border-radius: 12px; padding: 12px; }
 .preview-frame iframe { height: 72vh; max-width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 dialog.modal.retry { width: min(620px, 94vw); }
+
+/* ---- 휴대폰: 표는 줄마다 한 덩어리로 쌓고, 버튼은 손가락 크기로 (2026-10-20 표가 화면 밖으로 밀려 버튼이 안 보임) ---- */
+@media (max-width: 860px) {
+  .head { flex-wrap: wrap; }
+  .head .tools { margin-left: 0; flex-wrap: wrap; }
+  .panel { padding: 18px 16px; }
+  .panel-title, .modal-head { flex-wrap: wrap; }
+  .segment { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .segment button { flex: none; white-space: nowrap; }
+  input, select, textarea { font-size: 16px; } /* 16px 아래면 아이폰이 입력할 때 화면을 확대한다 */
+
+  main table, main tbody, main tr, main td { display: block; }
+  main thead { display: none; }
+  main tr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  main tbody tr:last-child { border-bottom: 0; }
+  /* 칸 너비는 PC 표에 맞춰 코드에 박혀 있어(style width) 여기서만 덮는다 */
+  main td { width: auto !important; padding: 0; border: 0; }
+  main td:empty { display: none; }
+  main td:has(.title-cell) { flex: 1 1 0; min-width: 60%; }
+  main td:has(.actions) { flex-basis: 100%; }
+  .actions { justify-content: flex-start; flex-wrap: wrap; }
+  .actions > * { flex: 1 1 auto; justify-content: center; } /* 줄을 넘긴 버튼이 혼자 덩그러니 남지 않게 폭을 나눠 채운다 */
+  tr.click:hover td, tr.on td { background: none; }
+  tr.click.on { background: var(--green-soft); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  tr.grouprow { padding: 18px 0 8px; }
+  tr.grouprow td { padding: 0; border: 0; }
+  tr.logrow { padding: 0 0 14px; }
+  tr.logrow td { flex-basis: 100%; padding: 0; background: none; }
+
+  .modal-body { padding: 18px 16px; }
+  .preview-frame { padding: 6px; }
+}
+/* 손가락으로 누르는 기기: 누르는 곳 44px */
+@media (pointer: coarse) {
+  .btn, .nav, .segment button, .side-foot { min-height: 44px; }
+  .guide { min-height: 36px; }
+  .check { min-height: 44px; }
+  input[type="checkbox"] { width: 22px; height: 22px; }
+  .chip button { width: 32px; height: 32px; }
+}

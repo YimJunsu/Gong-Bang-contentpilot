@@ -161,7 +161,7 @@ function PostPreview({ dir, title, onClose }) {
       <div className="modal-body">
         <div className="modal-head">
           <div><b>{title || dir.split(/[\\/]/).pop()}</b><div className="sub">{dir}</div></div>
-          <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+          <div className="row" style={{ gap: 8 }}>
             <div className="segment" role="group" aria-label="미리보기 폭">
               {[[false, 'PC'], [true, '휴대폰']].map(([m, name]) => <button key={name} type="button" className={mobile === m ? 'on' : ''} onClick={() => setMobile(m)}>{name}</button>)}
             </div>
@@ -208,7 +208,22 @@ export default function Page() {
     prevRunning.current = running;
   }, [running, loadState, loadPosts]);
 
-  const go = (id) => { setTab(id); try { localStorage.setItem('tab', id); } catch { /* 무시 */ } };
+  // 좁은 화면: 사이드바는 ☰로 여닫는 서랍. 메뉴를 고르면 닫힌다
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtn = useRef(null);
+  const go = (id) => { setTab(id); setMenuOpen(false); try { localStorage.setItem('tab', id); } catch { /* 무시 */ } };
+  // 열리면 고른 메뉴에 포커스·ESC로 닫기, 닫히면 ☰ 버튼으로 포커스를 돌려준다
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    document.querySelector('.side .nav.on')?.focus();
+    const esc = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    const wide = window.matchMedia('(min-width: 861px)'); // 열린 채 창을 넓히면 PC 화면에서 본문이 잠긴 채 남는다
+    const shut = () => { if (wide.matches) setMenuOpen(false); };
+    window.addEventListener('keydown', esc);
+    wide.addEventListener('change', shut);
+    return () => { window.removeEventListener('keydown', esc); wide.removeEventListener('change', shut); menuBtn.current?.focus(); };
+  }, [menuOpen]);
+  const tabName = MENU.flatMap((g) => g.items).find(([id]) => id === tab)?.[1] || '';
   const [tour, setTour] = useState(null);
   const startTour = useCallback((id) => setTour(id || TOUR_OF_TAB[tab] || 'home'), [tab]);
   const endTour = (finished) => {
@@ -242,7 +257,15 @@ export default function Page() {
     <DialogProvider>
     <TourContext.Provider value={startTour}>
     <div className="shell">
-      <nav className="side" aria-label="메뉴" data-tour="nav">
+      <header className="topbar" inert={menuOpen}>
+        <button ref={menuBtn} className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="메뉴 열기" aria-expanded={menuOpen} data-tour="nav">
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3 6h16M3 11h16M3 16h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        </button>
+        <b>{tabName}</b>
+        {running > 0 && <button className="btn" onClick={() => go('jobs')}><span className="dot wait" aria-hidden="true" />진행 중 {running}</button>}
+      </header>
+      {menuOpen && <div className="side-dim" onClick={() => setMenuOpen(false)} />}
+      <nav className={`side${menuOpen ? ' open' : ''}`} aria-label="메뉴" data-tour="nav">
         <div className="side-menu">
         <div className="brand">공방-콘텐츠파일럿</div>
         {MENU.map(({ group, items }) => (
@@ -259,7 +282,7 @@ export default function Page() {
         </div>
         <SessionBadge state={state} go={go} />
       </nav>
-      <main key={tab} className="page">{views[tab]}</main>
+      <main key={tab} className="page" inert={menuOpen}>{views[tab]}</main>
       {tour && <Tour key={tour} steps={TOURS[tour]} onClose={endTour} go={go} />}
     </div>
     </TourContext.Provider>

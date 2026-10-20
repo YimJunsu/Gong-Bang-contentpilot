@@ -185,7 +185,10 @@ export function Tour({ steps, onClose, go }) {
   const step = steps[i];
   const last = i === steps.length - 1;
 
-  const find = useCallback(() => (step.target ? document.querySelector(`[data-tour="${step.target}"]`) : null), [step]);
+  // 같은 이름이 둘이면 지금 보이는 쪽을 고른다 (메뉴: PC는 사이드바, 휴대폰은 ☰ 버튼 — 닫힌 사이드바는 visibility: hidden)
+  const find = useCallback(() => (step.target
+    ? [...document.querySelectorAll(`[data-tour="${step.target}"]`)].find((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden') || null
+    : null), [step]);
   const measure = useCallback(() => { const el = find(); setRect(el ? el.getBoundingClientRect() : null); }, [find]);
 
   // 단계가 바뀌면: 필요한 화면으로 이동 → 요소가 그려질 때까지 기다림 → 화면 가운데로 스크롤 → 위치 측정

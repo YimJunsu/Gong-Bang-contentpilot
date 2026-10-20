@@ -1,0 +1,458 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-20T00:45:26.219Z",
+  "title": "Design System: 공방-콘텐츠파일럿",
+  "extensions": {
+    "colorMeta": {
+      "naver-green": {
+        "role": "primary",
+        "displayName": "네이버 그린",
+        "canonical": "#00c73c",
+        "tonalRamp": [
+          "oklch(15.0% 0.200 145.5)",
+          "oklch(26.4% 0.200 145.5)",
+          "oklch(37.9% 0.200 145.5)",
+          "oklch(49.3% 0.200 145.5)",
+          "oklch(60.7% 0.200 145.5)",
+          "oklch(72.1% 0.200 145.5)",
+          "oklch(83.6% 0.200 145.5)",
+          "oklch(95.0% 0.200 145.5)"
+        ]
+      },
+      "naver-green-pressed": {
+        "role": "primary",
+        "displayName": "눌린 그린",
+        "canonical": "#00b335",
+        "tonalRamp": [
+          "oklch(15.0% 0.200 145.5)",
+          "oklch(26.4% 0.200 145.5)",
+          "oklch(37.9% 0.200 145.5)",
+          "oklch(49.3% 0.200 145.5)",
+          "oklch(60.7% 0.200 145.5)",
+          "oklch(72.1% 0.200 145.5)",
+          "oklch(83.6% 0.200 145.5)",
+          "oklch(95.0% 0.200 145.5)"
+        ]
+      },
+      "green-ink": {
+        "role": "primary",
+        "displayName": "짙은 그린 글자",
+        "canonical": "#00852f",
+        "tonalRamp": [
+          "oklch(15.0% 0.159 147.2)",
+          "oklch(26.4% 0.159 147.2)",
+          "oklch(37.9% 0.159 147.2)",
+          "oklch(49.3% 0.159 147.2)",
+          "oklch(60.7% 0.159 147.2)",
+          "oklch(72.1% 0.159 147.2)",
+          "oklch(83.6% 0.159 147.2)",
+          "oklch(95.0% 0.159 147.2)"
+        ]
+      },
+      "green-soft": {
+        "role": "primary",
+        "displayName": "옅은 그린",
+        "canonical": "#e9f9ee",
+        "tonalRamp": [
+          "oklch(15.0% 0.022 155.9)",
+          "oklch(26.4% 0.022 155.9)",
+          "oklch(37.9% 0.022 155.9)",
+          "oklch(49.3% 0.022 155.9)",
+          "oklch(60.7% 0.022 155.9)",
+          "oklch(72.1% 0.022 155.9)",
+          "oklch(83.6% 0.022 155.9)",
+          "oklch(95.0% 0.022 155.9)"
+        ]
+      },
+      "signal-blue": {
+        "role": "secondary",
+        "displayName": "신호 파랑",
+        "canonical": "#2f6feb",
+        "tonalRamp": [
+          "oklch(15.0% 0.199 261.8)",
+          "oklch(26.4% 0.199 261.8)",
+          "oklch(37.9% 0.199 261.8)",
+          "oklch(49.3% 0.199 261.8)",
+          "oklch(60.7% 0.199 261.8)",
+          "oklch(72.1% 0.199 261.8)",
+          "oklch(83.6% 0.199 261.8)",
+          "oklch(95.0% 0.199 261.8)"
+        ]
+      },
+      "alert-red": {
+        "role": "tertiary",
+        "displayName": "경고 빨강",
+        "canonical": "#d93f44",
+        "tonalRamp": [
+          "oklch(15.0% 0.191 23.5)",
+          "oklch(26.4% 0.191 23.5)",
+          "oklch(37.9% 0.191 23.5)",
+          "oklch(49.3% 0.191 23.5)",
+          "oklch(60.7% 0.191 23.5)",
+          "oklch(72.1% 0.191 23.5)",
+          "oklch(83.6% 0.191 23.5)",
+          "oklch(95.0% 0.191 23.5)"
+        ]
+      },
+      "alert-red-pressed": {
+        "role": "tertiary",
+        "displayName": "눌린 빨강",
+        "canonical": "#c4363b",
+        "tonalRamp": [
+          "oklch(15.0% 0.179 23.5)",
+          "oklch(26.4% 0.179 23.5)",
+          "oklch(37.9% 0.179 23.5)",
+          "oklch(49.3% 0.179 23.5)",
+          "oklch(60.7% 0.179 23.5)",
+          "oklch(72.1% 0.179 23.5)",
+          "oklch(83.6% 0.179 23.5)",
+          "oklch(95.0% 0.179 23.5)"
+        ]
+      },
+      "alert-red-soft": {
+        "role": "tertiary",
+        "displayName": "옅은 빨강",
+        "canonical": "#fdeeee",
+        "tonalRamp": [
+          "oklch(15.0% 0.016 17.4)",
+          "oklch(26.4% 0.016 17.4)",
+          "oklch(37.9% 0.016 17.4)",
+          "oklch(49.3% 0.016 17.4)",
+          "oklch(60.7% 0.016 17.4)",
+          "oklch(72.1% 0.016 17.4)",
+          "oklch(83.6% 0.016 17.4)",
+          "oklch(95.0% 0.016 17.4)"
+        ]
+      },
+      "caution-amber": {
+        "role": "tertiary",
+        "displayName": "주의 호박색",
+        "canonical": "#b45309",
+        "tonalRamp": [
+          "oklch(15.0% 0.146 49.0)",
+          "oklch(26.4% 0.146 49.0)",
+          "oklch(37.9% 0.146 49.0)",
+          "oklch(49.3% 0.146 49.0)",
+          "oklch(60.7% 0.146 49.0)",
+          "oklch(72.1% 0.146 49.0)",
+          "oklch(83.6% 0.146 49.0)",
+          "oklch(95.0% 0.146 49.0)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "종이",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15.0% 0.000 89.9)",
+          "oklch(26.4% 0.000 89.9)",
+          "oklch(37.9% 0.000 89.9)",
+          "oklch(49.3% 0.000 89.9)",
+          "oklch(60.7% 0.000 89.9)",
+          "oklch(72.1% 0.000 89.9)",
+          "oklch(83.6% 0.000 89.9)",
+          "oklch(95.0% 0.000 89.9)"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "작업대 바닥",
+        "canonical": "#f4f6f3",
+        "tonalRamp": [
+          "oklch(15.0% 0.004 134.8)",
+          "oklch(26.4% 0.004 134.8)",
+          "oklch(37.9% 0.004 134.8)",
+          "oklch(49.3% 0.004 134.8)",
+          "oklch(60.7% 0.004 134.8)",
+          "oklch(72.1% 0.004 134.8)",
+          "oklch(83.6% 0.004 134.8)",
+          "oklch(95.0% 0.004 134.8)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "먹",
+        "canonical": "#17201b",
+        "tonalRamp": [
+          "oklch(15.0% 0.016 160.5)",
+          "oklch(26.4% 0.016 160.5)",
+          "oklch(37.9% 0.016 160.5)",
+          "oklch(49.3% 0.016 160.5)",
+          "oklch(60.7% 0.016 160.5)",
+          "oklch(72.1% 0.016 160.5)",
+          "oklch(83.6% 0.016 160.5)",
+          "oklch(95.0% 0.016 160.5)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "흐린 먹",
+        "canonical": "#5e6b63",
+        "tonalRamp": [
+          "oklch(15.0% 0.020 158.6)",
+          "oklch(26.4% 0.020 158.6)",
+          "oklch(37.9% 0.020 158.6)",
+          "oklch(49.3% 0.020 158.6)",
+          "oklch(60.7% 0.020 158.6)",
+          "oklch(72.1% 0.020 158.6)",
+          "oklch(83.6% 0.020 158.6)",
+          "oklch(95.0% 0.020 158.6)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "가는 선",
+        "canonical": "#e1e7e2",
+        "tonalRamp": [
+          "oklch(15.0% 0.009 150.7)",
+          "oklch(26.4% 0.009 150.7)",
+          "oklch(37.9% 0.009 150.7)",
+          "oklch(49.3% 0.009 150.7)",
+          "oklch(60.7% 0.009 150.7)",
+          "oklch(72.1% 0.009 150.7)",
+          "oklch(83.6% 0.009 150.7)",
+          "oklch(95.0% 0.009 150.7)"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "진한 선",
+        "canonical": "#c8d2ca",
+        "tonalRamp": [
+          "oklch(15.0% 0.015 151.7)",
+          "oklch(26.4% 0.015 151.7)",
+          "oklch(37.9% 0.015 151.7)",
+          "oklch(49.3% 0.015 151.7)",
+          "oklch(60.7% 0.015 151.7)",
+          "oklch(72.1% 0.015 151.7)",
+          "oklch(83.6% 0.015 151.7)",
+          "oklch(95.0% 0.015 151.7)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "페이지 머리 제목. 화면마다 하나."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "대시보드 상태 띠의 큰 숫자."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "패널·투어·확인창 제목."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "기본 글자."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "표 머리, 메뉴 그룹 이름, 입력칸 설명."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "작업 로그, HTML 코드 편집칸."
+      }
+    },
+    "shadows": [
+      {
+        "name": "select-halo",
+        "value": "0 0 0 3px #e9f9ee",
+        "purpose": "포커스된 입력칸, 선택된 글꼴 카드, 로그인됨 점."
+      },
+      {
+        "name": "segment-lift",
+        "value": "0 1px 2px rgba(23, 32, 27, .12)",
+        "purpose": "세그먼트에서 선택된 칸."
+      },
+      {
+        "name": "floating",
+        "value": "0 24px 60px rgba(23, 32, 27, .28)",
+        "purpose": "투어 설명 상자."
+      },
+      {
+        "name": "dialog",
+        "value": "0 30px 80px rgba(23, 32, 27, .3)",
+        "purpose": "확인창, 큰 창."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-soft",
+        "value": "cubic-bezier(.2, .7, .3, 1)",
+        "purpose": "페이지 진입, 투어 상자·링 이동."
+      },
+      {
+        "name": "ease-pop",
+        "value": "cubic-bezier(.2, .8, .3, 1.1)",
+        "purpose": "창이 떠오를 때 살짝 튕김."
+      },
+      {
+        "name": "duration-state",
+        "value": ".16s",
+        "purpose": "색·테두리·그림자 변화."
+      },
+      {
+        "name": "duration-press",
+        "value": ".12s",
+        "purpose": "누를 때 scale(.97)."
+      },
+      {
+        "name": "duration-enter",
+        "value": ".2s–.28s",
+        "purpose": "페이지·창·투어 등장과 이동."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "860px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "기본 버튼",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "대부분의 동작.",
+      "html": "<button class=\"ds-btn\">미리보기</button>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 14px; border:1px solid #e1e7e2; border-radius:10px; background:#fff; color:#17201b; font:inherit; font-size:14px; font-weight:700; cursor:pointer; transition:background-color .16s ease, border-color .16s ease, transform .12s ease; } .ds-btn:hover { border-color:#c8d2ca; background:#fafbfa; } .ds-btn:active { transform:scale(.97); } .ds-btn:focus-visible { outline:3px solid color-mix(in srgb, #00c73c 55%, transparent); outline-offset:2px; }"
+    },
+    {
+      "name": "주요 버튼",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "화면에서 다음에 누를 하나.",
+      "html": "<button class=\"ds-btn-primary\">글 생성 시작</button>",
+      "css": ".ds-btn-primary { display:inline-flex; align-items:center; gap:7px; height:48px; padding:0 22px; border:1px solid #00c73c; border-radius:12px; background:#00c73c; color:#fff; font:inherit; font-size:15.5px; font-weight:700; cursor:pointer; transition:background-color .16s ease, transform .12s ease; } .ds-btn-primary:hover { background:#00b335; } .ds-btn-primary:active { transform:scale(.97); } .ds-btn-primary:focus-visible { outline:3px solid color-mix(in srgb, #00c73c 55%, transparent); outline-offset:2px; }"
+    },
+    {
+      "name": "삭제 버튼",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "평소엔 조용하고 hover 때만 빨강.",
+      "html": "<button class=\"ds-btn-danger\">삭제</button>",
+      "css": ".ds-btn-danger { display:inline-flex; align-items:center; height:38px; padding:0 14px; border:1px solid #e1e7e2; border-radius:10px; background:#fff; color:#17201b; font:inherit; font-size:14px; font-weight:700; cursor:pointer; transition:background-color .16s ease, border-color .16s ease, color .16s ease; } .ds-btn-danger:hover { border-color:#f1c4c6; background:#fdeeee; color:#d93f44; } .ds-btn-danger:focus-visible { outline:3px solid color-mix(in srgb, #00c73c 55%, transparent); outline-offset:2px; }"
+    },
+    {
+      "name": "입력칸",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "이름표 + 입력 + 설명.",
+      "html": "<label class=\"ds-field\"><span>주제</span><input class=\"ds-input\" placeholder=\"무엇에 대해 쓸까요?\"><small>한 줄이면 충분해요.</small></label>",
+      "css": ".ds-field { display:block; } .ds-field > span { display:block; margin-bottom:6px; font-size:14px; font-weight:700; color:#17201b; } .ds-field > small { display:block; margin-top:5px; color:#5e6b63; font-size:12.5px; } .ds-input { width:100%; font:inherit; font-weight:500; color:#17201b; background:#fff; border:1px solid #e1e7e2; border-radius:10px; padding:10px 12px; transition:border-color .16s ease, box-shadow .16s ease; } .ds-input:focus { outline:none; border-color:#00c73c; box-shadow:0 0 0 3px #e9f9ee; }"
+    },
+    {
+      "name": "메뉴",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "사이드바 메뉴. 이모지 없음.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-group\">글</div><button class=\"ds-nav-item on\">글 생성하기</button><button class=\"ds-nav-item\">글 목록<span class=\"ds-count\">2</span></button><button class=\"ds-nav-item\">작업 로그</button></nav>",
+      "css": ".ds-nav { width:248px; padding:14px; background:#fff; border-right:1px solid #e1e7e2; } .ds-group { margin:0 10px 6px; color:#5e6b63; font-size:12.5px; font-weight:700; } .ds-nav-item { display:flex; align-items:center; gap:12px; width:100%; padding:8px 10px; border:0; border-radius:12px; background:none; color:#17201b; font:inherit; font-weight:600; text-align:left; cursor:pointer; transition:background-color .16s ease, color .16s ease; } .ds-nav-item:hover { background:#f4f6f3; } .ds-nav-item.on { background:#e9f9ee; color:#00852f; font-weight:800; } .ds-nav-item:focus-visible { outline:3px solid color-mix(in srgb, #00c73c 55%, transparent); outline-offset:2px; } .ds-count { margin-left:auto; min-width:22px; padding:0 7px; border-radius:99px; background:#2f6feb; color:#fff; font-size:12px; font-weight:800; text-align:center; }"
+    },
+    {
+      "name": "파일 칩",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "고른 파일. ×로 뺀다.",
+      "html": "<span class=\"ds-chip\">사진1.jpg<button aria-label=\"빼기\">×</button></span>",
+      "css": ".ds-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 4px 3px 10px; border:1px solid #e1e7e2; border-radius:99px; background:#fff; font-size:13px; color:#17201b; } .ds-chip button { width:22px; height:22px; border:0; border-radius:50%; background:none; color:#5e6b63; font-size:15px; line-height:1; cursor:pointer; } .ds-chip button:hover { background:#fdeeee; color:#d93f44; }"
+    },
+    {
+      "name": "패널",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "흰 면 + 가는 선, 그림자 없음.",
+      "html": "<section class=\"ds-panel\"><h2>참고 자료</h2><p>링크나 파일을 넣으면 AI가 읽고 씁니다.</p></section>",
+      "css": ".ds-panel { background:#fff; border:1px solid #e1e7e2; border-radius:14px; padding:22px 24px; color:#17201b; } .ds-panel h2 { margin:0 0 14px; font-size:17px; font-weight:800; letter-spacing:-0.02em; } .ds-panel p { margin:0; color:#5e6b63; font-size:13.5px; }"
+    },
+    {
+      "name": "세그먼트",
+      "kind": "custom",
+      "description": "몇 개 중 하나 고르기.",
+      "html": "<div class=\"ds-segment\"><button class=\"on\">전체</button><button>완료</button><button>실패</button></div>",
+      "css": ".ds-segment { display:inline-flex; padding:3px; border-radius:11px; background:#f4f6f3; border:1px solid #e1e7e2; } .ds-segment button { border:0; background:none; padding:7px 14px; border-radius:8px; font:inherit; font-size:14px; font-weight:700; color:#5e6b63; cursor:pointer; transition:background-color .16s ease, color .16s ease; } .ds-segment button.on { background:#fff; color:#17201b; box-shadow:0 1px 2px rgba(23,32,27,.12); }"
+    },
+    {
+      "name": "상태",
+      "kind": "custom",
+      "description": "색 + 글자로 작업 상태.",
+      "html": "<span class=\"ds-status run\">● 쓰는 중</span> <span class=\"ds-status done\">● 완료</span> <span class=\"ds-status fail\">● 실패</span>",
+      "css": ".ds-status { display:inline-flex; align-items:center; gap:6px; font-weight:700; font-size:13.5px; } .ds-status.run { color:#2f6feb; } .ds-status.done { color:#00852f; } .ds-status.fail { color:#d93f44; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "조용한 작업대 (The Quiet Workbench)",
+    "overview": "공방의 작업대처럼, 도구는 조용히 제자리에 있고 주인공은 그 위에서 만들어지는 글이다. 화면 자체는 흰 종이와 옅은 녹회색 바닥으로 거의 소리를 내지 않는다. 색의 대부분은 Fluent 3D 이모지가 맡고, 화면이 직접 쓰는 강조색은 네이버 그린 하나뿐이다. 그래서 초록이 보이면 \"여기가 지금 선택된 곳\" 또는 \"누를 버튼\"이라는 뜻이 된다.",
+    "keyCharacteristics": [
+      "흰 면(`paper`) + 옅은 녹회색 바닥(`ground`) + 1px 가는 선(`line`)으로 면을 나눈다",
+      "강조색은 네이버 그린 하나. 파랑은 \"진행 중\", 빨강은 \"실패·삭제\"라는 상태 신호로만 쓴다",
+      "SUIT 한 서체로 굵기만 바꿔 위계를 만든다",
+      "색과 표정은 3D 이모지가, 화면은 조용히",
+      "짧고 결과를 보여 주는 움직임만, `prefers-reduced-motion`이면 모두 끈다"
+    ],
+    "rules": [
+      {
+        "name": "The One Green Rule",
+        "body": "화면이 스스로 고르는 강조색은 네이버 그린 하나다. 새 기능에 다른 브랜드색을 들이지 않는다.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal-Only Rule",
+        "body": "파랑과 빨강은 장식이 아니라 상태(진행 중 / 실패·삭제)다. 상태가 아닌 곳에 쓰지 않는다.",
+        "section": "colors"
+      },
+      {
+        "name": "The Emoji Carries Color Rule",
+        "body": "화면에 색과 표정이 더 필요하면 면을 칠하지 말고 Fluent 3D 이모지를 쓴다. 단, 꼭 필요한 곳에만 쓰고 사이드바에는 넣지 않는다.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weight-Not-Size Rule",
+        "body": "위계는 굵기(800 / 700 / 600 / 500)로 만든다. 크기를 키워서 소리치는 곳은 페이지 머리 하나뿐이다.",
+        "section": "typography"
+      },
+      {
+        "name": "The Keep-All Rule",
+        "body": "한글 문구는 낱말 단위로 줄바꿈한다(`keep-all`). 긴 경로·명령 줄만 아무 데서나 끊는다.",
+        "section": "typography"
+      },
+      {
+        "name": "The Strip-Not-Cards Rule",
+        "body": "나란한 요약 정보는 카드 여러 장으로 흩지 않고 한 면을 선으로 나눈다.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-At-Rest Rule",
+        "body": "화면에 붙어 있는 면에는 그림자가 없다. 그림자는 떠 있는 것과 선택된 것만의 몫이다.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Bigger-Is-Rounder Rule",
+        "body": "모서리 반경은 요소 크기를 따라간다. 작은 요소에 큰 반경을 주거나 큰 면을 각지게 두지 않는다.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "새 색을 쓰기 전에 기존 토큰(`--green`, `--blue`, `--red`, `--ground`, `--line`)으로 되는지 먼저 본다. 토큰은 `app/globals.css`의 `:root`에 있다.",
+      "오래 걸리는 버튼은 `<Action>`으로 만들어 스피너를 쓰고 폭을 유지한다.",
+      "알림·확인은 전부 `useDialog()`로 띄운다.",
+      "새 화면에도 페이지 머리(이모지 + 제목 + 한 줄 설명)를 하나만 둔다.",
+      "움직임은 0.12~0.28초, 결과를 보여 줄 때만 넣고 `prefers-reduced-motion`에서 꺼지게 한다.",
+      "860px 아래에서도 쓸 수 있게 만든다. 가로로 넘치지 않게 하고, 좁은 화면에서는 1열로 쌓는다.",
+      "상태는 색만으로 전하지 말고 이모지·글자를 함께 쓴다(`.status`)."
+    ],
+    "donts": [
+      "다크 모드나 운영체제 테마를 따라가는 색을 만들지 않는다. 라이트 고정이다.",
+      "SUIT 말고 다른 UI 서체를 들이지 않는다. 고정폭 서체는 로그·코드에만 쓴다.",
+      "버튼 글자를 \"처리 중…\"으로 바꾸지 않는다.",
+      "사이드바 메뉴에 이모지를 넣지 않는다. 다른 곳에서도 꼭 필요할 때만 쓰고, 이모지는 Fluent 3D(`public/emoji`)만 쓴다.",
+      "브라우저 기본 `alert` / `confirm`을 쓰지 않는다.",
+      "화면에 붙은 패널에 그림자를 주지 않는다.",
+      "파랑·빨강을 장식으로 쓰지 않는다."
+    ]
+  }
+}

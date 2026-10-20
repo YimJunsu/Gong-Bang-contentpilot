@@ -48,7 +48,7 @@
 3. 실행: `start.cmd` 더블클릭. 첫 실행 때 `config.json`이 `config.example.json`에서 자동 생성된다.
 4. 화면 → 설정: **블로그 작업 폴더**(예: `D:\BLOG\Oducki`, 이 폴더는 git에 없으니 따로 옮겨야 함), 크롬 경로가 다르면 `config.json`의 `chromePath` 수정.
 5. 설정 → **계정 관리** → 네이버 계정 추가 → **로그인 창 열기** → 뜬 크롬에서 직접 로그인(**로그인 상태 유지** 체크). 로그인 프로필은 PC마다 새로 만든다 — 다른 PC의 `data/`를 복사해 오지 않는다.
-6. 개발 루프: 코드 수정 → `npm run check` → `start.cmd`로 재시작(항상 다시 빌드). 화면만 볼 땐 `.claude/launch.json`의 `ui-preview`(5998, `next start`)로 띄우고 `/api`는 fetch를 가짜로 바꿔 확인했다.
+6. 개발 루프: 코드 수정 → `npm run check` → `start.cmd`로 재시작(항상 다시 빌드). 화면만 볼 땐 `.claude/launch.json`의 `ui-preview`(5998, `next start`)로 띄우고 `/api`는 fetch를 가짜로 바꿔 확인했다. 개발 모드(`npm run dev`)는 `http://localhost:5999`로 열 것 — `127.0.0.1:5999`로 열면 화면 스크립트가 붙지 않아 메뉴가 안 눌린다(2026-10-20 확인, 같은 와이파이 접속을 만들 때 다시 볼 것).
 
 ## 4. 지켜야 할 것 (사용자 요구·결정)
 
