@@ -75,7 +75,8 @@ const defaultSession = () => { const a = defaultNaverOf(); return a ? state.acco
 async function checkSession(account) {
   const s = { ...(await naver.session(config, account.profile)), checkedAt: new Date().toISOString() };
   state.accounts[account.id] = s;
-  if (s.blogId && !account.blogId) { account.blogId = s.blogId; saveConfig(); }
+  // 로그인한 계정의 '내 블로그'로 가서 읽은 주소가 맞는 값이다 → 비었거나 다르면 고친다(예전에 잘못 저장된 아이디로 임시저장이 실패했었다)
+  if (s.blogId && account.blogId !== s.blogId) { account.blogId = s.blogId; saveConfig(); }
   saveState();
   return s;
 }
@@ -125,6 +126,25 @@ async function newestPostSince(since, root) {
     if (st && st.birthtimeMs >= since && (!best || st.birthtimeMs > best.t)) best = { t: st.birthtimeMs, full: dir };
   }
   return best?.full || null;
+}
+
+// 다시 생성할 때 원래 작업하던 글 폴더: 결과 폴더 → 고치던 폴더 → (실패한 작업) 그 작업이 도는 동안 생긴 날짜 폴더가 딱 하나면 그것
+// ponytail: 실패한 작업은 생성 시각으로 추정한다. 같은 시간에 글 작업이 둘 이상 돌아 후보가 여럿이면 못 고르고 새 폴더로 쓴다.
+async function postDirOf(job, root) {
+  for (const dir of [job.result?.postDir, job.input.reviseDir]) if (dir && insideRoot(dir) && existsSync(dir)) return dir;
+  if (job.type !== 'write' || !rootOk(root)) return '';
+  const from = Date.parse(job.startedAt) - 5000, to = Date.parse(job.endedAt || new Date().toISOString()) + 5000;
+  const born = [];
+  const look = async (dir, depth) => {
+    for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (!e.isDirectory() || /^[_.]/.test(e.name)) continue;
+      const full = path.join(dir, e.name);
+      if (/^\d{8}-/.test(e.name)) { const t = (await fs.stat(full)).birthtimeMs; if (t >= from && t <= to) born.push(full); }
+      else if (depth < 2) await look(full, depth + 1);
+    }
+  };
+  await look(root, 1);
+  return born.length === 1 ? born[0] : '';
 }
 
 const hasRules = (root) => existsSync(path.join(root, 'AGENTS.md'));
@@ -193,14 +213,15 @@ const parseTime = (v) => {
 };
 const youtubeId = (url) => String(url).match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/)?.[1] || '';
 // reviseDir = 작업 로그의 '다시 생성 → 지금 글 고치기': 처음부터 쓰지 않고 그 폴더의 글을 고친다. feedback = 다시 생성할 때 적은 의견
-function writePrompt({ root, topic, category, notes, files = [], refs = [], linkTexts = [], sourceUrl, sourceText, feedback, reviseDir, imageMode }) {
+function writePrompt({ root, topic, category, notes, files = [], refs = [], linkTexts = [], sourceUrl, sourceText, feedback, reviseDir, rewrite, imageMode }) {
   const mode = IMAGE_MODES[imageMode] ? imageMode : files.length ? 'auto' : 'real';
   const candidates = mode === 'generated' ? [] : linkTexts.filter((l) => l.images?.length);
   return [
     hasRules(root)
       ? '이 폴더의 AGENTS.md와 거기서 읽으라고 한 규칙 파일을 모두 읽고, 그대로 따라 블로그 글 1편을 끝까지 완성하라.'
       : `블로그 글 1편을 끝까지 완성하라.\n${DEFAULT_FORMAT}`,
-    reviseDir ? `이미 쓴 글이 있다: ${reviseDir}\n처음부터 다시 쓰지 말고, 아래 수정 요청을 반영해 이 폴더의 글(HTML·meta.json·검증 메모)을 고쳐 완성하라. 요청과 관계없는 문단과 이미지는 그대로 둔다(바꿔야 할 때만 새로 만든다). 규칙과 검증기는 그대로 지킨다.` : '',
+    reviseDir && rewrite ? `이미 쓴 글 폴더가 있다: ${reviseDir}\n같은 주제로 처음부터 다시 쓰되, 새 폴더를 만들지 말고 이 폴더에 덮어쓴다. HTML·meta.json·검증 메모는 새로 쓰고, 기존 이미지는 새 글에 맞으면 다시 써도 된다. 새 글에서 쓰지 않는 이미지 파일(assets 안 webp 등)은 지운다. 중복 확인에서 이 폴더 자신은 중복으로 보지 않는다.` : '',
+    reviseDir && !rewrite ? `이미 쓴 글이 있다: ${reviseDir}\n처음부터 다시 쓰지 말고, 아래 수정 요청을 반영해 이 폴더의 글(HTML·meta.json·검증 메모)을 고쳐 완성하라. 요청과 관계없는 문단과 이미지는 그대로 둔다(바꿔야 할 때만 새로 만든다). 규칙과 검증기는 그대로 지킨다.` : '',
     feedback ? `수정 요청(이번에 꼭 반영한다):\n${feedback}` : '',
     `주제: ${topic}`,
     category ? `분류 폴더: ${category}` : '분류: 규칙에 따라 판단 (기존 분류 폴더 중 맞는 곳). 리뷰(직접 경험) 분류는 그 상품·메뉴·장소를 직접 겪은 사진·설명이 있을 때만 쓴다. 사진이 있어도 방법·예절·날씨·일정·가격·소식처럼 정보를 알려 주는 글이면 정보 분류다. 정한 분류와 이유 한 줄을 검증 메모에 남긴다.',
@@ -261,7 +282,10 @@ function shortsPrompt({ topic, notes, files }) {
 
 const jobTypes = {
   async shorts(job, log) {
-    const dir = path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(job.input.topic || '숏폼')}-${job.id.slice(-4)}`);
+    // 다시 생성이면 원래 폴더에서(대본·영상은 새로 만든다), 처음이면 새 폴더
+    const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
+    const dir = again ? job.input.dir : path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(job.input.topic || '숏폼')}-${job.id.slice(-4)}`);
+    if (again) await fs.rm(path.join(dir, 'script.json'), { force: true });
     const media = path.join(dir, 'media');
     await fs.mkdir(media, { recursive: true });
     for (const f of job.input.files || []) await fs.copyFile(f, path.join(media, path.basename(f)));
@@ -287,8 +311,9 @@ const jobTypes = {
     if (job.input.shortentsId) await linkShortents(job.input.shortentsId, job.id);
     if (job.input.hotKeyword) await linkHot(job.input.hotKeyword, job.id);
     const root = needRoot(rootOf(naverAccountOrNone(job.input.account)));
-    const revising = Boolean(job.input.reviseDir) && existsSync(job.input.reviseDir);
-    if (revising) log(`고쳐 쓰기: ${job.input.reviseDir}`);
+    const inPlace = Boolean(job.input.reviseDir) && existsSync(job.input.reviseDir);
+    const revising = inPlace && !job.input.rewrite; // 고쳐 쓰기는 자료를 다시 읽지 않는다. 같은 폴더에 처음부터 다시 쓰기는 다시 읽는다
+    if (inPlace) log(`${revising ? '고쳐 쓰기' : '같은 폴더에 처음부터 다시 쓰기'}: ${job.input.reviseDir}`);
     let sourceText = '';
     if (job.input.sourceUrl && !revising) {
       log('숏텐츠 요약 화면 읽는 중');
@@ -309,10 +334,11 @@ const jobTypes = {
       linkTexts.push({ url, text: page?.text?.replace(/\n{3,}/g, '\n\n').slice(0, 6000) || '', images });
     }
     log(`${engine} 실행 · 주제: ${job.input.topic}`);
-    const output = await runAI(config, engine, writePrompt({ ...job.input, reviseDir: revising ? job.input.reviseDir : '', root, sourceText, linkTexts }), { cwd: root, log });
-    const postDir = output.match(POST_RE)?.[1]?.trim().replace(/^`|`$/g, '') || (revising ? job.input.reviseDir : await newestPostSince(since, root));
+    const output = await runAI(config, engine, writePrompt({ ...job.input, reviseDir: inPlace ? job.input.reviseDir : '', root, sourceText, linkTexts }), { cwd: root, log });
+    const postDir = output.match(POST_RE)?.[1]?.trim().replace(/^`|`$/g, '') || (inPlace ? job.input.reviseDir : await newestPostSince(since, root));
     if (!postDir || !existsSync(postDir)) throw new Error('게시물 폴더를 찾지 못했습니다');
     log(`게시물 폴더: ${postDir}`);
+    if (inPlace && state.drafted[postDir]) { delete state.drafted[postDir]; saveState(); log('글이 바뀌어 임시저장 표시를 지웠습니다 — 다시 임시저장하세요'); }
     if (job.input.draft) await draft(postDir, log, job.input.account);
     return { postDir };
   },
@@ -765,13 +791,16 @@ const server = http.createServer(async (req, res) => {
       const { mode, feedback, how, draft: wantDraft } = JSON.parse((await body(req)).toString() || '{}');
       const dir = job.result?.dir || job.input.dir;
       let input = job.input;
+      // 다시 생성은 원래 작업 폴더에서 한다(결과 폴더가 둘 생겨 헷갈리지 않게). 폴더가 없을 때만 새로 만든다
       if (job.type === 'write') {
-        const { feedback: _f, reviseDir: _r, ...base } = job.input;
+        const { feedback: _f, reviseDir: _r, rewrite: _w, ...base } = job.input;
         const note = String(feedback || '').trim().slice(0, 4000);
-        const reviseDir = how === 'revise' && job.result?.postDir && insideRoot(job.result.postDir) && existsSync(job.result.postDir) ? job.result.postDir : '';
         if (how === 'revise' && !note) return send(res, 400, { error: '고쳐 쓰려면 무엇을 고칠지 적어 주세요' });
-        input = { ...base, ...(note ? { feedback: note } : {}), ...(reviseDir ? { reviseDir } : {}), ...(typeof wantDraft === 'boolean' ? { draft: wantDraft } : {}) };
+        const reviseDir = await postDirOf(job, rootOf(naverAccountOrNone(job.input.account)));
+        const rewrite = Boolean(reviseDir) && !(how === 'revise' && job.status === 'done');
+        input = { ...base, ...(note ? { feedback: note } : {}), ...(reviseDir ? { reviseDir } : {}), ...(rewrite ? { rewrite } : {}), ...(typeof wantDraft === 'boolean' ? { draft: wantDraft } : {}) };
       }
+      if (job.type === 'shorts' && dir && inShorts(dir) && existsSync(dir)) input = { ...job.input, dir };
       const again = mode === 'render' && dir ? startJob('render', { dir }, jobTypes.render) : startJob(job.type, input, jobTypes[job.type]);
       return send(res, 200, again);
     }

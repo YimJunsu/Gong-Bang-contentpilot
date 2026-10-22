@@ -2,6 +2,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Tour, TOURS, TOUR_OF_TAB, TourContext } from './tour';
 import { DialogProvider, useDialog } from './dialog';
+import { createPortal } from 'react-dom';
 
 // 서버(server.mjs)는 x-bh 헤더가 없는 POST를 막는다 (다른 사이트발 요청 차단)
 async function api(path, opts = {}) {
@@ -37,6 +38,15 @@ async function track(key, work) {
   try { return await work(); } finally { pending.delete(key); emitPending(); }
 }
 const usePending = (key) => useSyncExternalStore(subscribePending, () => Boolean(key) && pending.has(key), () => false);
+
+// 같은 이유로, 화면이 직접 받는 목록(핫 키워드·숏텐츠·숏폼)도 마지막 값을 화면 밖에 둔다.
+// 다시 들어오면 그 값을 바로 보여 주고 새로 받아 바꾼다 — 메뉴를 옮길 때마다 "불러오는 중"으로 비지 않게 (2026-10-21)
+const lastData = new Map();
+function useApiData(path) {
+  const [data, setData] = useState(() => lastData.get(path) ?? null);
+  const load = useCallback(() => api(path).then((d) => { lastData.set(path, d); setData(d); }).catch(() => {}), [path]);
+  return [data, load];
+}
 
 // 버튼 하나의 "누르는 동안 잠금 + 오류 알림"
 // loading: 누르는 동안 글자 대신 도는 표시 / track: 진행 중 이름 — 주면 다른 화면에 다녀와도 진행 중으로 보인다 / busy: 서버가 알려 준 진행 중
@@ -243,9 +253,9 @@ export default function Page() {
     home: <Home state={state} posts={posts} running={running} reload={loadState} startJob={startJob} pickTopic={pickTopic} go={go} />,
     reward: <HotKeywords startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} go={go} />,
     shortents: <Shortents startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} />,
-    auto: <Soon title="글 자동화" desc="정해진 시간마다 숏텐츠·핫 키워드에서 좋은 주제를 골라 글까지 자동으로 만듭니다">지금은 글 생성하기나 숏텐츠의 "이걸로 글쓰기"로 한 편씩 만들 수 있습니다.</Soon>,
-    insta: <Soon title="인스타 자동화" desc="만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
-    threads: <Soon title="스레드 자동화" desc="만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
+    auto: <Soon id="auto" title="글 자동화" desc="정해진 시간마다 숏텐츠·핫 키워드에서 좋은 주제를 골라 글까지 자동으로 만듭니다">지금은 글 생성하기나 숏텐츠의 "이걸로 글쓰기"로 한 편씩 만들 수 있습니다.</Soon>,
+    insta: <Soon id="insta" title="인스타 자동화" desc="만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
+    threads: <Soon id="threads" title="스레드 자동화" desc="만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
     write: <Write draft={draft} setDraft={setDraft} engine={state?.config?.engine} startJob={startJob} categories={state?.categories || []} hasRules={state?.hasRules} naver={naverOf(state?.config)} rootOk={state?.rootOk} root={state?.root} go={go} />,
     shorts: state && <Shorts config={state.config} reload={loadState} startJob={startJob} jobs={jobs} />,
     posts: <Posts posts={posts} startJob={startJob} categories={state?.categories || []} naver={naverOf(state?.config)} reload={() => { loadPosts().catch(() => {}); loadState().catch(() => {}); }} />,
@@ -573,7 +583,7 @@ function Posts({ posts: defaultPosts, startJob, categories: defaultCats, reload,
 }
 
 // ---- 작업 로그: 줄을 누르면 바로 아래에 로그가 열리고, 다시 누르면 닫힌다 ----
-// 다시 생성(글): 의견을 적고, 만든 글을 고칠지(빠름) 처음부터 새로 쓸지 고른다
+// 다시 생성(글): 의견을 적고, 만든 글을 고칠지(빠름) 처음부터 다시 쓸지 고른다. 어느 쪽이든 원래 글 폴더에서 한다(없으면 새로)
 function RetryDialog({ job, onClose, onStarted }) {
   const ref = useRef(null);
   const canRevise = job.status === 'done' && Boolean(job.result?.postDir);
@@ -595,11 +605,12 @@ function RetryDialog({ job, onClose, onStarted }) {
         {canRevise && (
           <div className="field"><span>어떻게 할까요?</span>
             <div className="segment" role="group" aria-label="다시 생성 방법">
-              {[['revise', '지금 글 고치기'], ['new', '처음부터 새로 쓰기']].map(([id, name]) => <button key={id} type="button" className={how === id ? 'on' : ''} onClick={() => setHow(id)}>{name}</button>)}
+              {[['revise', '지금 글 고치기'], ['new', '처음부터 다시 쓰기']].map(([id, name]) => <button key={id} type="button" className={how === id ? 'on' : ''} onClick={() => setHow(id)}>{name}</button>)}
             </div>
-            <small>{how === 'revise' ? '만든 글 폴더를 그대로 두고 적은 의견만 반영해 고칩니다. 처음부터 쓰는 것보다 빠릅니다.' : '같은 주제·자료로 새 글 폴더에 처음부터 다시 씁니다. 지금 글은 그대로 남습니다.'}</small>
+            <small>{how === 'revise' ? '만든 글 폴더를 그대로 두고 적은 의견만 반영해 고칩니다. 처음부터 쓰는 것보다 빠릅니다.' : '같은 주제·자료로 처음부터 다시 씁니다. 새 폴더를 만들지 않고 지금 글 폴더에 덮어씁니다.'}</small>
           </div>
         )}
+        {!canRevise && <p className="note" style={{ marginBottom: 12 }}>이 작업이 쓰던 글 폴더가 남아 있으면 그 폴더에서 이어서 다시 쓰고, 없으면 새 폴더를 만듭니다.</p>}
         <label className="field"><span>의견·원하는 점</span>
           <textarea autoFocus rows={6} value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder={'예)\n제목에 가격을 넣어 줘\n두 번째 소제목은 빼고 웨이팅 팁을 더 자세히\n썸네일은 더 밝게'} />
           <small>{how === 'revise' ? '고칠 점을 적어 주세요(필수)' : '비워 두면 같은 조건으로 다시 씁니다'}</small>
@@ -785,10 +796,10 @@ function Shorts({ config, reload, startJob, jobs }) {
   const [form, setForm] = useState({ topic: '', notes: '', font: 'blackhan' });
   const [engine, setEngine] = useState(config.engine || 'codex');
   const [note, setNote] = useState('');
-  const [list, setList] = useState([]);
+  const [shortList, load] = useApiData('/api/shorts');
+  const list = shortList || [];
   const [open, setOpen] = useState(null);
   const [files, setFiles] = useState([]);
-  const load = useCallback(() => api('/api/shorts').then(setList).catch(() => {}), []);
   const doneCount = jobs.filter((j) => ['shorts', 'render'].includes(j.type) && j.status !== 'running').length;
   useEffect(() => { load(); }, [load, doneCount]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -841,7 +852,7 @@ function Shorts({ config, reload, startJob, jobs }) {
               </tr>
             ))}</tbody>
           </table>
-        ) : <Empty title="아직 만든 숏폼이 없습니다">위에서 자료를 넣고 시작해 보세요.</Empty>}
+        ) : shortList ? <Empty title="아직 만든 숏폼이 없습니다">위에서 자료를 넣고 시작해 보세요.</Empty> : <Empty title="불러오는 중" />}
       </section>
       {current && <ShortDialog key={current.dir} short={current} onClose={() => setOpen(null)} startJob={startJob} />}
     </>
@@ -1019,12 +1030,11 @@ const JOB_STATE = { running: '작성 중', done: '작성함', failed: '작성 �
 
 function Shortents({ startJob, pickTopic, engine }) {
   const dialog = useDialog();
-  const [data, setData] = useState(null);
+  const [data, load] = useApiData('/api/shortents');
   const [cat, setCat] = useState('all');
   const [scope, setScope] = useState('now');
   const [onlyNew, setOnlyNew] = useState(false);
   const [hideSimilar, setHideSimilar] = useState(false);
-  const load = useCallback(() => api('/api/shortents').then(setData).catch(() => {}), []);
   const refreshing = usePending('shortents-refresh') || Boolean(data?.busy);
   useEffect(() => { load(); const t = setInterval(load, refreshing ? 3000 : 60_000); return () => clearInterval(t); }, [load, refreshing]);
 
@@ -1090,7 +1100,7 @@ function Shortents({ startJob, pickTopic, engine }) {
               </tr>
             ))}</tbody>
           </table>
-        ) : <Empty title={data ? '조건에 맞는 숏텐츠가 없습니다' : '불러오는 중'}>{data && !data.lastFetch ? '지금 새로고침을 눌러 처음 받아 오세요.' : '거르기 조건을 바꿔 보세요.'}</Empty>}
+        ) : <Empty title={data ? '조건에 맞는 숏텐츠가 없습니다' : '불러오는 중'}>{!data ? '' : !data.lastFetch ? '지금 새로고침을 눌러 처음 받아 오세요.' : '거르기 조건을 바꿔 보세요.'}</Empty>}
       </section>
     </>
   );
@@ -1103,11 +1113,10 @@ const searchUrl = (q) => `https://search.naver.com/search.naver?query=${encodeUR
 
 function HotKeywords({ startJob, pickTopic, engine, go }) {
   const dialog = useDialog();
-  const [data, setData] = useState(null);
+  const [data, load] = useApiData('/api/hotkeywords');
   const [cat, setCat] = useState('all');
   const [rising, setRising] = useState(false);
   const [hideSimilar, setHideSimilar] = useState(false);
-  const load = useCallback(() => api('/api/hotkeywords').then(setData).catch(() => {}), []);
   const refreshing = usePending('hot-refresh') || Boolean(data?.busy);
   useEffect(() => { load(); const t = setInterval(load, refreshing ? 3000 : 60_000); return () => clearInterval(t); }, [load, refreshing]);
 
@@ -1168,16 +1177,99 @@ function HotKeywords({ startJob, pickTopic, engine, go }) {
               </tr>
             ))}</tbody>
           </table>
-        ) : <Empty title={data ? '보여 줄 검색어가 없습니다' : '불러오는 중'}>{data && !data.fetchedAt ? '로그인한 뒤 지금 새로고침을 눌러 처음 받아 오세요.' : '거르기 조건을 바꿔 보세요.'}</Empty>}
+        ) : <Empty title={data ? '보여 줄 검색어가 없습니다' : '불러오는 중'}>{!data ? '' : !data.fetchedAt ? '로그인한 뒤 지금 새로고침을 눌러 처음 받아 오세요.' : '거르기 조건을 바꿔 보세요.'}</Empty>}
       </section>
     </>
   );
 }
 
 // ---- 자동화 메뉴(준비 중): 글 자동화·인스타 자동화·스레드 자동화 자리만 잡아 둔다 ----
-function Soon({ title, desc, children }) {
+// 블록 5개가 하나씩 끼워지며 '이 기능이 돌아가면 이런 모습'을 보여 준다. 숫자는 예시
+const SPLASH = {
+  auto: { name: '글 자동화', hello: '자는 동안\n글이 쌓여요', emoji: 'robot',
+    pill: ['calendar', '다음 실행', '내일 오전 7:00', '예약됨'],
+    big: ['fire', '오늘 고른 주제', '핫 키워드 1위\n가을 캠핑 준비물', '3', '편', '오늘 만들 글'],
+    steps: ['지금 하는 일', '글 쓰는 중', ['주제 고르기', '글·이미지', '임시저장']],
+    stats: [['만든 글', '12', '편'], ['임시저장', '12', '편'], ['한 편에', '9', '분']] },
+  insta: { name: '인스타 자동화', hello: '글 한 편이\n피드가 돼요', emoji: 'camera',
+    pill: ['clapper', '새 릴스', '숏폼 1개 바꾸기 끝', '올리기'],
+    big: ['books', '카드형 게시물', '가을 캠핑 준비물\n10장으로 정리', '10', '장', '카드 수'],
+    steps: ['지금 하는 일', '캡션 다듬는 중', ['카드 만들기', '캡션·태그', '올리기']],
+    stats: [['게시물', '8', '개'], ['릴스', '3', '개'], ['해시태그', '15', '개']] },
+  threads: { name: '스레드 자동화', hello: '긴 글은 짧게\n첫 줄은 세게', emoji: 'sparkles',
+    pill: ['link', '블로그 글 연결', '가을 캠핑 준비물', '연결됨'],
+    big: ['memo', '첫 줄 훅', '"이거 모르고 가면\n밤새 떨어요"', '5', '개', '나눈 글'],
+    steps: ['지금 하는 일', '글 나누는 중', ['훅 쓰기', '짧게 나누기', '올리기']],
+    stats: [['스레드', '5', '개'], ['글자 수', '480', '자'], ['예약', '2', '개']] }
+};
+
+// 자동화 메뉴마다 하루 첫 진입에 한 번 띄우는 소개 화면. 날짜(이 PC 기준)가 바뀌면 다시 뜬다.
+// 마지막 블록이 끼워지고 1초 뒤 저절로 닫혀 본 화면이 보인다
+function Splash({ id }) {
+  const s = SPLASH[id];
+  const key = `splash-${id}`;
+  const today = new Date().toLocaleDateString('sv'); // YYYY-MM-DD, 00시에 바뀐다
+  const [phase, setPhase] = useState('hidden'); // hidden → in → out
+  const btn = useRef(null);
+  useEffect(() => {
+    let seen = null;
+    try { seen = localStorage.getItem(key); } catch { /* 무시 */ }
+    if (seen !== today) setPhase('in');
+  }, [key, today]);
+  const close = useCallback(() => {
+    try { localStorage.setItem(key, today); } catch { /* 무시 */ }
+    setPhase('out');
+    setTimeout(() => setPhase('hidden'), 320); // 움직임 줄이기 설정이면 animationend가 안 와서 타이머로 닫는다
+  }, [key, today]);
+  useEffect(() => {
+    if (phase !== 'in') return undefined;
+    btn.current?.focus();
+    const esc = (e) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [phase, close]);
+  // ponytail: 움직임 줄이기 설정이면 조립 애니메이션이 없어 저절로 닫히지 않는다 — 건너뛰기·ESC로 닫는다
+  const assembled = (e) => { if (e.target === e.currentTarget) setTimeout(close, 1000); };
+  if (!s || phase === 'hidden') return null;
+  const [pIcon, pTop, pMain, pBtn] = s.pill;
+  const [bIcon, bTop, bTitle, bNum, bUnit, bCap] = s.big;
+  const [stTop, stNow, stItems] = s.steps;
+  return createPortal( // 본문(.page)의 등장 애니메이션(transform) 안에서는 fixed가 화면 전체를 못 덮어 body에 띄운다
+    <div className={`splash${phase === 'out' ? ' out' : ''}`} role="dialog" aria-modal="true" aria-label={`${s.name} 미리보기`}>
+      <button ref={btn} className="splash-skip" onClick={close}>건너뛰기</button>
+      <div className="sp-stack">
+        <section className="sp-b lime" style={{ '--i': 0 }}>
+          <div className="sp-kicker">미리보기 · 준비 중</div>
+          <div className="sp-row"><h2>{s.hello}</h2><span className="sp-av"><Emoji name={s.emoji} size={44} /></span></div>
+        </section>
+        <section className="sp-b pink sp-pill" style={{ '--i': 1 }}>
+          <span className="sp-ic"><Emoji name={pIcon} size={24} /></span>
+          <span className="sp-two"><small>{pTop}</small><b>{pMain}</b></span>
+          <span className="sp-chip">{pBtn}</span>
+        </section>
+        <section className="sp-b blue" style={{ '--i': 2, '--above': 'var(--sp-pink)' }}>
+          <div className="sp-corner"><b>{bNum}<small>{bUnit}</small></b><span>{bCap}</span></div>
+          <div className="sp-row start"><span className="sp-ic"><Emoji name={bIcon} size={24} /></span><span className="sp-two"><small>{bTop}</small><b className="sp-dim">{s.name}</b></span></div>
+          <h3>{bTitle}</h3>
+        </section>
+        <section className="sp-b mint" style={{ '--i': 3, '--above': 'var(--sp-blue)' }}>
+          <small>{stTop}</small>
+          <div className="sp-now">{stNow}</div>
+          <ol className="sp-steps">{stItems.map((t, i) => <li key={t} className={i === 0 ? 'done' : i === 1 ? 'now' : ''}><i />{t}</li>)}</ol>
+        </section>
+        <section className="sp-b lime sp-stats" style={{ '--i': 4, '--above': 'var(--sp-mint)' }} onAnimationEnd={assembled}>
+          {s.stats.map(([label, num, unit]) => <div key={label}><small>{label}</small><b>{num}<small>{unit}</small></b></div>)}
+        </section>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function Soon({ id, title, desc, children }) {
   return (
     <>
+      <Splash id={id} />
       <Head title={title} desc={desc} />
       <section className="panel">
         <Empty title="준비 중입니다">{children}</Empty>

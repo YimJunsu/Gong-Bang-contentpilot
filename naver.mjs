@@ -319,7 +319,13 @@ export async function saveDraft(config, account, postDir, log = () => {}) {
       }
       if (!frame) await sleep(500);
     }
-    if (!frame) throw new Error('에디터를 찾지 못했습니다');
+    if (!frame) {
+      // 블로그 아이디가 틀리면 네이버가 '해당 블로그가 없습니다' 화면을 띄워 에디터가 안 나온다
+      if (await page.getByText('해당 블로그가 없습니다').count().catch(() => 0)) {
+        throw new Error(`블로그 아이디 '${account.blogId}'로는 블로그가 없습니다. 설정 → 계정 관리에서 세션 확인을 누르면 맞는 아이디로 고쳐집니다.`);
+      }
+      throw new Error('에디터를 찾지 못했습니다');
+    }
     // "작성 중인 글이 있습니다" 복구 팝업 → 새로 쓰기(취소)
     await frame.locator('.se-popup-button-cancel').click({ timeout: 3000 }).catch(() => {});
     await frame.addScriptTag({ content: htmlJs });
