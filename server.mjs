@@ -213,7 +213,8 @@ const parseTime = (v) => {
 };
 const youtubeId = (url) => String(url).match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/)?.[1] || '';
 // reviseDir = 작업 로그의 '다시 생성 → 지금 글 고치기': 처음부터 쓰지 않고 그 폴더의 글을 고친다. feedback = 다시 생성할 때 적은 의견
-function writePrompt({ root, topic, category, notes, files = [], refs = [], linkTexts = [], sourceUrl, sourceText, feedback, reviseDir, rewrite, imageMode }) {
+// thumbNotes = 글 생성하기의 '썸네일 요청사항'. 비면 주제에 맞게 블로그 썸네일 규칙대로 정한다
+function writePrompt({ root, topic, category, notes, thumbNotes, files = [], refs = [], linkTexts = [], sourceUrl, sourceText, feedback, reviseDir, rewrite, imageMode }) {
   const mode = IMAGE_MODES[imageMode] ? imageMode : files.length ? 'auto' : 'real';
   const candidates = mode === 'generated' ? [] : linkTexts.filter((l) => l.images?.length);
   return [
@@ -226,6 +227,9 @@ function writePrompt({ root, topic, category, notes, files = [], refs = [], link
     `주제: ${topic}`,
     category ? `분류 폴더: ${category}` : '분류: 규칙에 따라 판단 (기존 분류 폴더 중 맞는 곳). 리뷰(직접 경험) 분류는 그 상품·메뉴·장소를 직접 겪은 사진·설명이 있을 때만 쓴다. 사진이 있어도 방법·예절·날씨·일정·가격·소식처럼 정보를 알려 주는 글이면 정보 분류다. 정한 분류와 이유 한 줄을 검증 메모에 남긴다.',
     notes ? `요청사항(그대로 따른다):\n${notes}` : '',
+    String(thumbNotes || '').trim()
+      ? `썸네일(대표 사진) 요청(블로그 썸네일 규칙 안에서 그대로 반영한다. 장면·소품·표정·글자를 요청대로 하고, 요청에 없는 부분만 규칙대로 정한다):\n${String(thumbNotes).trim()}`
+      : reviseDir && !rewrite ? '' : '썸네일(대표 사진): 따로 요청이 없다. 주제와 본문 핵심에 맞는 장면·글자를 블로그 썸네일 규칙대로 정한다.', // 고쳐 쓰기면 기존 썸네일 유지
     files.length ? `내 사진·영상(내가 직접 찍은 것 — 직접 열어 보고 본문에 실제 사진으로 넣는다. 규칙대로 webp로 바꿔 assets에 둔다):\n${files.map((f) => `- ${f}`).join('\n')}` : '',
     refs.length ? `참고 자료(PDF·HTML·캡처 등 — 직접 열어 사실·숫자·일정을 확인하는 용도. 문장을 베끼지 않는다. 쓸 만한 이미지는 그대로 넣지 말고 규칙의 이미지 스타일로 새로 만든다):\n${refs.map((f) => `- ${f}`).join('\n')}` : '',
     ...linkTexts.map((l) => `참고 링크 ${l.url} — 공식 정보로 우선한다. 요청사항이 이 페이지의 이미지를 쓰라고 하면 이미지를 내려받아 assets에 넣고 출처는 검증 메모에 남긴다. 페이지 텍스트:\n${l.text ? quote(l.text) : '(서버가 읽지 못함 — 가능하면 직접 열어 확인한다)'}`),

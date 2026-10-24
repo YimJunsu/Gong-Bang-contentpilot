@@ -193,7 +193,7 @@ export default function Page() {
   const [state, setState] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [posts, setPosts] = useState([]);
-  const [draft, setDraft] = useState({ topic: '', category: '', notes: '', links: '', photos: [], refFiles: [] });
+  const [draft, setDraft] = useState({ topic: '', category: '', notes: '', thumbNotes: '', links: '', photos: [], refFiles: [] });
 
   const loadState = useCallback(async () => setState(await api('/api/state')), []);
   const loadPosts = useCallback(async () => setPosts(await api('/api/posts')), []);
@@ -399,8 +399,10 @@ function Home({ state, posts, running, reload, startJob, pickTopic, go }) {
 const REQUEST_EXAMPLE = `예)
 치이카와 샵에 대한 내용으로 작성, 강조 볼드·인용 추가
 PDF 중 참고 이미지 쓸만한 건 우리 스타일로 새로 생성
-웨이팅 꿀팁도 같이, 정확성·가독성·SEO·GEO 최대화
-썸네일: 오덕이랑 치이카와가 손잡고 노는 장면 1:1`;
+웨이팅 꿀팁도 같이, 정확성·가독성·SEO·GEO 최대화`;
+const THUMB_EXAMPLE = `예)
+오덕이랑 치이카와가 손잡고 노는 장면
+2줄 글자: 치이카와마켓 / 웨이팅 2시간`;
 
 const linksOf = (text) => [...new Set(String(text || '').split(/\s+/).filter((s) => /^https?:\/\/\S+$/i.test(s)))];
 
@@ -425,7 +427,7 @@ function Write({ draft, setDraft, engine: defaultEngine, startJob, categories, h
     const refPaths = await uploadAll(draft.refFiles, setNote, account);
     const { photos: _p, refFiles: _r, ...fields } = draft;
     await startJob({ type: 'write', ...fields, topic: draft.topic.trim(), engine, files: photoPaths, refs: refPaths, links, draft: autoDraft, account });
-    setDraft({ topic: '', category: '', notes: '', links: '', photos: [], refFiles: [], account: draft.account }); // 숏텐츠 출처도 함께 비운다
+    setDraft({ topic: '', category: '', notes: '', thumbNotes: '', links: '', photos: [], refFiles: [], account: draft.account }); // 숏텐츠 출처도 함께 비운다
   };
 
   return (
@@ -454,7 +456,11 @@ function Write({ draft, setDraft, engine: defaultEngine, startJob, categories, h
           </label>
           <label className="field"><span>요청사항</span>
             <textarea value={draft.notes} onChange={set('notes')} rows={6} placeholder={REQUEST_EXAMPLE} />
-            <small>강조할 내용, 인용·볼드, 쓸 이미지, 썸네일 장면, 말투 등 — ChatGPT에 쓰던 그대로 적으면 됩니다</small>
+            <small>강조할 내용, 인용·볼드, 쓸 이미지, 말투 등 — ChatGPT에 쓰던 그대로 적으면 됩니다</small>
+          </label>
+          <label className="field"><span>썸네일 요청사항</span>
+            <textarea value={draft.thumbNotes || ''} onChange={set('thumbNotes')} rows={3} placeholder={THUMB_EXAMPLE} />
+            <small>대표 사진(썸네일)의 장면·소품·표정·글자 등. 비워 두면 주제에 맞게 알아서 만듭니다</small>
           </label>
           <div className="grid2">
             <div className="field"><span>내 사진·영상</span><FilePick files={draft.photos || []} setFiles={setList('photos')} accept="image/*,video/*" hint="직접 찍은 사진 — 본문에 '내 사진'으로 들어갑니다. 없으면 공식 사진·영상 캡처를 찾아 씁니다(출처는 사진 아래 한 줄)" /></div>
