@@ -57,6 +57,8 @@ async function context(config, profile, headless = config.headless !== false) {
 // ponytail: 5분 쉬면 닫는다. 상시 띄워 둘 필요가 생기면 타이머를 빼면 된다.
 const release = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => exclusive(closeCtx), 300_000); };
 
+// 다른 모듈(naver-visits.mjs)이 같은 크롬·같은 대기열로 화면을 다룰 때 쓴다
+export const usePage = (config, profile, work) => withPage(config, profile, work);
 async function withPage(config, profile, work, headless) {
   return exclusive(async () => {
     const page = await (await context(config, profile, headless)).newPage();

@@ -3,6 +3,7 @@ import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalSt
 import { Tour, TOURS, TOUR_OF_TAB, TourContext } from './tour';
 import { DialogProvider, useDialog } from './dialog';
 import { createPortal } from 'react-dom';
+import { TITLE_STYLES } from '../title-styles.mjs';
 
 // 서버(server.mjs)는 x-bh 헤더가 없는 POST를 막는다 (다른 사이트발 요청 차단)
 async function api(path, opts = {}) {
@@ -21,10 +22,10 @@ const MENU = [
   { group: null, items: [['home', '대시보드', 'chart']] },
   { group: '찾기', items: [['reward', '핫 키워드', 'fire'], ['shortents', '숏텐츠', 'news']] },
   { group: '만들기', items: [['write', '글 생성하기', 'memo'], ['shorts', '숏폼 만들기', 'clapper']] },
-  { group: '자동화', items: [['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
+  { group: '자동화', items: [['visits', '댓글 답방', 'check'], ['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
   { group: '관리', items: [['posts', '글 목록', 'books'], ['jobs', '작업 로그', 'clipboard'], ['settings', '설정', 'gear']] }
 ];
-const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', render: '숏폼 렌더링' };
+const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', render: '숏폼 렌더링', visit: '답방 준비' };
 const STATUS = { running: ['hourglass', '진행 중'], done: ['check', '완료'], failed: ['cross', '실패'] };
 
 // 오래 걸리는 일(새로고침·로그인 창·세션 확인)은 다른 화면에 다녀와도 '진행 중'이 남아야 한다.
@@ -46,6 +47,15 @@ function useApiData(path) {
   const [data, setData] = useState(() => lastData.get(path) ?? null);
   const load = useCallback(() => api(path).then((d) => { lastData.set(path, d); setData(d); }).catch(() => {}), [path]);
   return [data, load];
+}
+
+// 거르기 조건처럼 메뉴를 옮겼다 와도(새로고침해도) 남아야 하는 값. 이 브라우저에만 저장된다
+function useSticky(key, initial) {
+  const [value, setValue] = useState(() => {
+    try { const raw = localStorage.getItem(`sticky-${key}`); return raw == null ? initial : JSON.parse(raw); } catch { return initial; }
+  });
+  useEffect(() => { try { localStorage.setItem(`sticky-${key}`, JSON.stringify(value)); } catch { /* 저장 못 해도 화면은 동작 */ } }, [key, value]);
+  return [value, setValue];
 }
 
 // 버튼 하나의 "누르는 동안 잠금 + 오류 알림"
@@ -247,12 +257,14 @@ export default function Page() {
     if (!seen) setTour('setup');
   }, [Boolean(state)]); // eslint-disable-line react-hooks/exhaustive-deps
   const pickTopic = (topic, category = '', source = null) => { setDraft((d) => ({ ...d, topic, category, sourceUrl: source?.linkUrl || '', shortentsId: source?.gdid || '', sourceLabel: source ? `숏텐츠 · ${source.category}` : '' })); go('write'); };
-  const startJob = async (body) => { await post('/api/jobs', body); go('jobs'); };
+  // stay: 작업 로그로 옮기지 않고 지금 화면에 남는다(숏텐츠·핫 키워드의 '이걸로 글쓰기' — 줄마다 진행 상태가 보인다)
+  const startJob = async (body, { stay = false } = {}) => { await post('/api/jobs', body); if (!stay) go('jobs'); };
 
   const views = {
     home: <Home state={state} posts={posts} running={running} reload={loadState} startJob={startJob} pickTopic={pickTopic} go={go} />,
     reward: <HotKeywords startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} go={go} />,
     shortents: <Shortents startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} />,
+    visits: <Visits />,
     auto: <Soon id="auto" title="글 자동화" desc="정해진 시간마다 숏텐츠·핫 키워드에서 좋은 주제를 골라 글까지 자동으로 만듭니다">지금은 글 생성하기나 숏텐츠의 "이걸로 글쓰기"로 한 편씩 만들 수 있습니다.</Soon>,
     insta: <Soon id="insta" title="인스타 자동화" desc="만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
     threads: <Soon id="threads" title="스레드 자동화" desc="만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
@@ -711,8 +723,19 @@ function Jobs({ jobs, reload }) {
 // ---- 숏폼 만들기 ----
 const TITLE_FONTS = [['blackhan', '검은고딕', '굵고 각진 예능 자막'], ['dohyeon', '도현', '단정한 정보형'], ['jua', '주아', '둥글고 귀여운']];
 const VOICES = [['ko-KR-SunHiNeural', '선희 · 여'], ['ko-KR-InJoonNeural', '인준 · 남'], ['ko-KR-HyunsuMultilingualNeural', '현수 · 남']];
-// 글꼴 미리보기: 영상과 같은 제목 스타일(흰 글씨/노란 글씨 + 검은 외곽선)
+// 글꼴 미리보기: 영상과 같은 제목 스타일(title-styles.mjs의 색·외곽선·띠·빛)
 const fontFaces = TITLE_FONTS.map(([id]) => `@font-face{font-family:"pv-${id}";src:url("/api/font?name=${id}")}`).join('');
+function TitleSample({ style }) {
+  const line2 = { color: style.line2, WebkitTextStroke: `6px ${style.stroke}` };
+  if (style.line2Box) Object.assign(line2, { display: 'inline-block', marginTop: 4, padding: '0 10px 3px', borderRadius: 8, background: style.line2Box, border: `3px solid ${style.stroke}`, WebkitTextStroke: 0 });
+  if (style.glow) line2.textShadow = `0 0 8px ${style.glow}, 0 0 18px ${style.glow}`;
+  return (
+    <div className="fontsample" style={{ fontFamily: `"pv-${style.font}"` }}>
+      <div style={{ color: style.line1, WebkitTextStroke: `6px ${style.stroke}` }}>강릉 커피축제</div>
+      <div><span style={line2}>이번 주말</span></div>
+    </div>
+  );
+}
 
 function VoiceSettings({ config, reload }) {
   const [tts, setTts] = useState(config.tts || {});
@@ -799,7 +822,7 @@ function ShortDialog({ short, onClose, startJob }) {
 }
 
 function Shorts({ config, reload, startJob, jobs }) {
-  const [form, setForm] = useState({ topic: '', notes: '', font: 'blackhan' });
+  const [form, setForm] = useState({ topic: '', notes: '', titleStyle: 'auto' });
   const [engine, setEngine] = useState(config.engine || 'codex');
   const [note, setNote] = useState('');
   const [shortList, load] = useApiData('/api/shorts');
@@ -831,12 +854,16 @@ function Shorts({ config, reload, startJob, jobs }) {
         </label>
         <div className="field"><span>자료</span><FilePick files={files} setFiles={setFiles} accept="image/*,video/*,.pdf" hint="사진·영상·PDF — 장면 배경과 내용으로 씁니다" /></div>
         </div>
-        <div className="field"><span>제목 글꼴</span>
-          <div className="fontcards" data-tour="shorts-fonts" role="radiogroup" aria-label="제목 글꼴">
-            {TITLE_FONTS.map(([id, name, desc]) => (
-              <button key={id} type="button" role="radio" aria-checked={form.font === id} className={`fontcard${form.font === id ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, font: id }))}>
-                <div className="fontsample" style={{ fontFamily: `"pv-${id}"` }}><div>강릉 커피축제</div><div className="y">이번 주말</div></div>
-                <div className="fontname"><b>{name}</b> <span className="muted">{desc}</span></div>
+        <div className="field"><span>제목 스타일</span>
+          <div className="fontcards" data-tour="shorts-fonts" role="radiogroup" aria-label="제목 스타일">
+            <button type="button" role="radio" aria-checked={form.titleStyle === 'auto'} className={`fontcard${form.titleStyle === 'auto' ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, titleStyle: 'auto' }))}>
+              <div className="fontsample auto">자동</div>
+              <div className="fontname"><b>자동</b> <span className="muted">내용·분위기에 맞게 AI가 고름</span></div>
+            </button>
+            {Object.entries(TITLE_STYLES).map(([id, style]) => (
+              <button key={id} type="button" role="radio" aria-checked={form.titleStyle === id} className={`fontcard${form.titleStyle === id ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, titleStyle: id }))}>
+                <TitleSample style={style} />
+                <div className="fontname"><b>{style.name}</b> <span className="muted">{style.desc}</span></div>
               </button>
             ))}
           </div>
@@ -1037,10 +1064,10 @@ const JOB_STATE = { running: '작성 중', done: '작성함', failed: '작성 �
 function Shortents({ startJob, pickTopic, engine }) {
   const dialog = useDialog();
   const [data, load] = useApiData('/api/shortents');
-  const [cat, setCat] = useState('all');
-  const [scope, setScope] = useState('now');
-  const [onlyNew, setOnlyNew] = useState(false);
-  const [hideSimilar, setHideSimilar] = useState(false);
+  const [cat, setCat] = useSticky('shortents-cat', 'all');
+  const [scope, setScope] = useSticky('shortents-scope', 'now');
+  const [onlyNew, setOnlyNew] = useSticky('shortents-new', false);
+  const [hideSimilar, setHideSimilar] = useSticky('shortents-similar', false);
   const refreshing = usePending('shortents-refresh') || Boolean(data?.busy);
   useEffect(() => { load(); const t = setInterval(load, refreshing ? 3000 : 60_000); return () => clearInterval(t); }, [load, refreshing]);
 
@@ -1054,11 +1081,12 @@ function Shortents({ startJob, pickTopic, engine }) {
   const write = async (x) => {
     const ok = await dialog.confirm({
       title: '이 숏텐츠로 글을 쓸까요?',
-      message: `「${x.title}」\n숏텐츠 요약 화면을 참고 자료로 넘겨 백그라운드에서 씁니다. 다 쓰면 글 목록에서 임시저장할 수 있습니다.`,
+      message: `「${x.title}」\n숏텐츠 요약 화면을 참고 자료로 넘겨 백그라운드에서 씁니다. 이 화면에 그대로 있으면서 줄마다 진행 상태가 보이고, 다 쓰면 글 목록에서 임시저장할 수 있습니다.`,
       ok: '글쓰기 시작'
     });
     if (!ok) return;
-    await startJob({ type: 'write', topic: x.title, category: '', notes: `네이버 숏텐츠 [${x.category}] 주제`, engine, files: [], draft: false, sourceUrl: x.linkUrl, shortentsId: x.gdid });
+    await startJob({ type: 'write', topic: x.title, category: '', notes: `네이버 숏텐츠 [${x.category}] 주제`, engine, files: [], draft: false, sourceUrl: x.linkUrl, shortentsId: x.gdid }, { stay: true });
+    setTimeout(load, 800); // 작업이 이 숏텐츠에 연결되면 줄에 '작성 중'이 뜬다
   };
 
   return (
@@ -1120,9 +1148,9 @@ const searchUrl = (q) => `https://search.naver.com/search.naver?query=${encodeUR
 function HotKeywords({ startJob, pickTopic, engine, go }) {
   const dialog = useDialog();
   const [data, load] = useApiData('/api/hotkeywords');
-  const [cat, setCat] = useState('all');
-  const [rising, setRising] = useState(false);
-  const [hideSimilar, setHideSimilar] = useState(false);
+  const [cat, setCat] = useSticky('hot-cat', 'all');
+  const [rising, setRising] = useSticky('hot-rising', false);
+  const [hideSimilar, setHideSimilar] = useSticky('hot-similar', false);
   const refreshing = usePending('hot-refresh') || Boolean(data?.busy);
   useEffect(() => { load(); const t = setInterval(load, refreshing ? 3000 : 60_000); return () => clearInterval(t); }, [load, refreshing]);
 
@@ -1136,11 +1164,12 @@ function HotKeywords({ startJob, pickTopic, engine, go }) {
     const ok = await dialog.confirm({
       title: '이 검색어로 글을 쓸까요?',
       message: `「${k.query}」 (${k.category} ${k.rank}위)
-검색어를 주제로 백그라운드에서 씁니다. 다 쓰면 글 목록에서 임시저장할 수 있습니다.`,
+검색어를 주제로 백그라운드에서 씁니다. 이 화면에 그대로 있으면서 줄마다 진행 상태가 보이고, 다 쓰면 글 목록에서 임시저장할 수 있습니다.`,
       ok: '글쓰기 시작'
     });
     if (!ok) return;
-    await startJob({ type: 'write', topic: k.query, category: '', notes: `네이버 어드바이저 주제별 인기유입검색어 [${k.category}] ${k.rank}위 — 이 검색어로 들어오는 사람이 찾는 내용을 정확히 담아라`, engine, files: [], draft: false, hotKeyword: k.query });
+    await startJob({ type: 'write', topic: k.query, category: '', notes: `네이버 어드바이저 주제별 인기유입검색어 [${k.category}] ${k.rank}위 — 이 검색어로 들어오는 사람이 찾는 내용을 정확히 담아라`, engine, files: [], draft: false, hotKeyword: k.query }, { stay: true });
+    setTimeout(load, 800);
   };
 
   return (
@@ -1269,6 +1298,80 @@ function Splash({ id }) {
       </div>
     </div>,
     document.body
+  );
+}
+
+// ---- 댓글 답방(반자동): 내 글에 댓글 단 서로이웃의 최근 글에 답방 댓글. 초안은 AI, 보내기는 사람이 누른다 ----
+const VISIT_STATE = { new: '새 댓글', preparing: '준비 중', drafted: '초안', sent: '보냄', skipped: '건너뜀' };
+function VisitCard({ item, reload }) {
+  const [text, setText] = useState(item.draft || '');
+  const dialog = useDialog();
+  const send = async () => {
+    const ok = await dialog.confirm({ title: `${item.author.name}님 글에 댓글을 보낼까요?`, message: `「${item.target?.title || ''}」\n\n${text}`, ok: '보내기' });
+    if (!ok) return;
+    await post('/api/visits/send', { id: item.id, text });
+    await reload();
+  };
+  return (
+    <div className="visit">
+      <div className="visit-head">
+        <b>{item.author.name}</b>
+        <span className="muted">님이 「{item.myPost?.title || '내 글'}」에 남긴 댓글</span>
+      </div>
+      {item.comment && <p className="visit-quote">{item.comment}</p>}
+      <div className="visit-target">답방할 글: <a href={item.target?.url} target="_blank" rel="noreferrer">{item.target?.title || '최근 글'}</a></div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} aria-label="답방 댓글" />
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span className="muted">{text.length}자</span>
+        <div className="actions">
+          <Action run={async () => { await post('/api/visits/skip', { id: item.id }); await reload(); }}>건너뛰기</Action>
+          <Action primary loading track={`visit-send-${item.id}`} run={send}>보내기</Action>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Visits() {
+  const [data, setData] = useState(null);
+  const load = useCallback(() => api('/api/visits').then(setData).catch(() => {}), []);
+  const busy = usePending('visit-prepare') || Boolean(data?.busy);
+  useEffect(() => { load(); const t = setInterval(load, busy ? 3000 : 30000); return () => clearInterval(t); }, [load, busy]);
+  const items = data?.items || [];
+  const drafts = items.filter((it) => it.status === 'drafted');
+  const history = items.filter((it) => it.status !== 'drafted');
+  const today = new Date().toLocaleDateString('sv-SE');
+  const sentToday = items.filter((it) => it.status === 'sent' && it.sentAt && new Date(it.sentAt).toLocaleDateString('sv-SE') === today).length;
+  return (
+    <>
+      <Head title="댓글 답방" desc="내 글에 댓글을 남긴 서로이웃의 최근 글에 답방 댓글을 답니다. 초안은 AI가 쓰고, 보내기는 직접 누릅니다">
+        <Action loading track="visit-prepare" busy={busy} run={async () => { await post('/api/jobs', { type: 'visit' }); await load(); }}>답방 준비</Action>
+      </Head>
+      <p className="muted" style={{ marginTop: -8, marginBottom: 14 }}>
+        {data ? `서로이웃 ${data.buddies}명 · 오늘 보냄 ${sentToday}/${data.limits?.perDay ?? 20}개 · 같은 이웃은 ${data.limits?.sameAuthorDays ?? 7}일에 한 번${data.lastPrepare ? ` · 마지막 준비 ${when(data.lastPrepare)}` : ''}` : '불러오는 중'}
+      </p>
+      <section className="panel" data-tour="visits-drafts">
+        <h2 className="panel-title">보낼 초안 <span className="muted" style={{ fontWeight: 600 }}>{drafts.length}개 · 고쳐서 보내도 됩니다</span></h2>
+        {drafts.length ? <div className="visits">{drafts.map((it) => <VisitCard key={it.id} item={it} reload={load} />)}</div>
+          : <Empty title={busy ? '준비하는 중입니다' : '보낼 초안이 없습니다'}>{busy ? '새 댓글을 읽고 서로이웃의 최근 글로 초안을 쓰고 있습니다. 1~3분쯤 걸립니다.' : "'답방 준비'를 누르면 새 댓글 중 서로이웃만 골라 초안을 만듭니다."}</Empty>}
+      </section>
+      {history.length > 0 && (
+        <section className="panel">
+          <h2 className="panel-title">기록</h2>
+          <table>
+            <thead><tr><th style={{ width: 90 }}>상태</th><th>이웃</th><th>내용</th><th style={{ width: 120 }}>시간</th></tr></thead>
+            <tbody>{history.slice(0, 50).map((it) => (
+              <tr key={it.id}>
+                <td><span className={`status ${it.status === 'sent' ? 'done' : ''}`}>{VISIT_STATE[it.status] || it.status}</span></td>
+                <td>{it.author.name}</td>
+                <td className="sub">{it.status === 'sent' ? it.sentText : it.reason || it.comment}</td>
+                <td className="muted">{when(it.sentAt || it.draftedAt || it.foundAt)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </section>
+      )}
+    </>
   );
 }
 

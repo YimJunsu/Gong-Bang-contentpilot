@@ -169,6 +169,7 @@ tr.logrow pre.log { max-height: 360px; }
 .fontcard.on { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .fontsample { background: #1f2a44; padding: 16px 10px; text-align: center; font-size: 30px; line-height: 1.2; color: #fff; -webkit-text-stroke: 6px #000; paint-order: stroke fill; letter-spacing: -0.5px; }
 .fontsample .y { color: #ffe600; }
+.fontsample.auto { display: grid; place-items: center; min-height: 92px; color: #fff; -webkit-text-stroke: 0; font-weight: 800; background: linear-gradient(135deg, #1f2a44, #4a1446 55%, #00331a); }
 .fontname { padding: 9px 12px; font-size: 14px; }
 details.voice { border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; background: #fbfcfb; }
 details.voice summary { cursor: pointer; font-weight: 700; }
@@ -369,3 +370,11 @@ dialog.modal.retry { width: min(620px, 94vw); }
   .sp-b h2 { font-size: 26px; }
   .sp-now, .sp-stats b { font-size: 28px; }
 }
+
+/* 댓글 답방 카드 */
+.visits { display: grid; gap: 12px; }
+.visit { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+.visit-head { margin-bottom: 6px; }
+.visit-quote { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--line); background: var(--ground); border-radius: 6px; font-size: 14px; }
+.visit-target { margin-bottom: 8px; font-size: 14px; }
+.visit textarea { min-height: 76px; margin-bottom: 8px; }

@@ -13,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 import ffmpegPath from 'ffmpeg-static';
 import { EdgeTTS } from 'node-edge-tts';
+import { titleStyleOf } from './title-styles.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS = path.join(HERE, 'assets', 'fonts');
@@ -302,7 +303,7 @@ function sceneData(scene, v, i, ctx) {
   const media = scene.media ? path.resolve(ctx.dir, scene.media) : null;
   return {
     index: i + 1, seconds: v.seconds, offset: ctx.offsets[i], total: ctx.total, fonts: ctx.fonts,
-    title: { lines: ctx.script.title || [], badge: ctx.script.badge || '' },
+    title: { lines: ctx.script.title || [], badge: ctx.script.badge || '', style: ctx.titleStyle },
     kind: media && IMAGE.test(media) ? 'image' : media && VIDEO.test(media) ? 'video' : 'color',
     media: media ? pathToFileURL(media).href : null,
     enter: scene.enter || (i === 0 ? 'pop' : ENTERS[(i - 1) % ENTERS.length]),
@@ -361,8 +362,10 @@ export async function renderShort(dir, script, { tts = {}, log = () => {} } = {}
   for (const [i, scene] of scenes.entries()) voices.push(await buildVoice(scene, i + 1, work, path.join(dir, 'voice-cache'), { ...tts, log }, log));
   const offsets = voices.reduce((acc, v, i) => [...acc, i ? acc[i - 1] + voices[i - 1].seconds : 0], []);
   const total = voices.reduce((s, v) => s + v.seconds, 0);
-  const face = FONT_CHOICES[script.font] || FONT_CHOICES.blackhan;
-  const ctx = { dir, script, offsets, total, fonts: { T: pathToFileURL(path.join(FONTS, face.file)).href, B: pathToFileURL(path.join(FONTS, 'Pretendard-ExtraBold.otf')).href } };
+  const titleStyle = titleStyleOf(script);
+  const face = FONT_CHOICES[titleStyle.font] || FONT_CHOICES.blackhan;
+  log(`제목 스타일: ${titleStyle.name}`);
+  const ctx = { dir, script, offsets, total, titleStyle, fonts: { T: pathToFileURL(path.join(FONTS, face.file)).href, B: pathToFileURL(path.join(FONTS, 'Pretendard-ExtraBold.otf')).href } };
 
   // 2) 장면을 몇 개씩 동시에 찍는다
   const browser = await chromium.launch({ executablePath: tts.chromePath, headless: true, args: ['--allow-file-access-from-files'] });

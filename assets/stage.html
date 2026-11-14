@@ -14,8 +14,13 @@
   #flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; }
 
   .title { position:absolute; top:110px; left:40px; right:40px; text-align:center; font-family:T; line-height:1.18; }
-  .title .line { font-size:118px; color:#fff; -webkit-text-stroke:22px #000; paint-order:stroke fill; letter-spacing:-2px; }
-  .title .line:nth-of-type(2) { color:#ffe600; }
+  .title { --t1:#fff; --t2:#ffe600; --ts:#000; --tbox:transparent; --tglow:transparent; }
+  .title .line { font-size:118px; color:var(--t1); -webkit-text-stroke:22px var(--ts); paint-order:stroke fill; letter-spacing:-2px; }
+  .title .line:nth-of-type(2) { color:var(--t2); }
+  /* 둘째 줄 띠(속보·노란 띠 스타일) */
+  .title.boxed .line:nth-of-type(2) { display:inline-block; margin-top:12px; padding:4px 34px 14px; border-radius:26px; background:var(--tbox); border:8px solid var(--ts); -webkit-text-stroke:0; }
+  /* 둘째 줄 빛 번짐(네온) */
+  .title.glow .line:nth-of-type(2) { text-shadow:0 0 18px var(--tglow), 0 0 44px var(--tglow); }
   .badge { display:inline-block; margin-bottom:20px; padding:8px 30px; border-radius:40px; background:#ff3b5c; color:#fff; font:52px B; border:5px solid #000; }
 
   #cap { position:absolute; left:60px; right:60px; top:1590px; height:230px; display:flex; align-items:center; justify-content:center; text-align:center; }
@@ -69,6 +74,12 @@ let S = null, media = null;
 window.setup = async (scene) => {
   S = scene;
   for (const [family, url] of Object.entries(scene.fonts)) { const f = new FontFace(family, `url("${url}")`); await f.load(); document.fonts.add(f); }
+  // 제목 스타일(title-styles.mjs): 색·외곽선·띠·빛
+  const ts = scene.title?.style || {};
+  const title = $('#title');
+  for (const [k, v] of [['--t1', ts.line1], ['--t2', ts.line2], ['--ts', ts.stroke], ['--tbox', ts.line2Box], ['--tglow', ts.glow]]) if (v) title.style.setProperty(k, v);
+  title.classList.toggle('boxed', Boolean(ts.line2Box));
+  title.classList.toggle('glow', Boolean(ts.glow));
   $('#title').innerHTML = scene.title?.lines?.length
     ? `${scene.title.badge ? `<span class="badge">${esc(scene.title.badge)}</span>` : ''}${scene.title.lines.map((l) => `<div class="line">${marked(l)}</div>`).join('')}` : '';
   if (scene.kind === 'image' || scene.kind === 'video') {

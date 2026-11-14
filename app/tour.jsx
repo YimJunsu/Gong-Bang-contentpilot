@@ -65,6 +65,13 @@ export const TOURS = {
       '그동안은 **글 생성하기**나 숏텐츠의 **이걸로 글쓰기**로 한 편씩 만들 수 있습니다.'
     ] }
   ],
+  visits: [
+    { target: 'visits-drafts', title: '댓글 답방', body: [
+      '**답방 준비**를 누르면 내소식에서 새 댓글을 읽고, **서로이웃**이 남긴 것만 골라 그 이웃의 최근 글로 AI가 댓글 초안을 씁니다.',
+      '초안을 확인하고 고친 뒤 **보내기**를 눌러야 댓글이 달립니다. 하루 20개까지, 보내기 사이 30초, 같은 이웃은 7일에 한 번입니다.',
+      '민감한 글(부고·질병 등)이나 읽을 수 없는 글은 AI가 건너뜁니다.'
+    ] }
+  ],
   insta: [
     { title: '인스타 자동화 (준비 중)', body: [
       '만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다. 지금은 준비 중입니다.'
@@ -174,7 +181,7 @@ export const TOURS = {
   ]
 };
 // 화면 → 그 화면 안내
-export const TOUR_OF_TAB = { auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', write: 'write', shorts: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
+export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', write: 'write', shorts: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
 
 const GAP = 14, W = 400;
 export function Tour({ steps, onClose, go }) {

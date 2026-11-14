@@ -8,8 +8,14 @@ import { runAI, lastJson } from './ai.mjs';
 import * as naver from './naver.mjs';
 import next from 'next';
 import { renderShort, FONT_CHOICES } from './video.mjs';
+import { TITLE_STYLES } from './title-styles.mjs';
 import { fetchShortents, updateStore, similarPost } from './shortents.mjs';
 import { notify } from './notify.mjs';
+import * as visits from './visits.mjs';
+import { pathToFileURL } from 'node:url';
+// 네이버 화면을 다루는 답방 코드는 부를 때마다 새로 읽는다(고쳐도 서버 재시작 없이 반영 — 재시작하면 로그인이 풀릴 수 있어서)
+const nvVisits = () => import(`${pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'naver-visits.mjs')).href}?v=${Date.now()}`);
+const onPage = async (profile, name, ...args) => { const mod = await nvVisits(); return naver.usePage(config, profile, (page) => mod[name](page, ...args)); };
 import { createReadStream } from 'node:fs';
 import { spawn } from 'node:child_process';
 
@@ -106,7 +112,7 @@ function startJob(type, input, work) {
 }
 
 // 끝난 작업을 Windows 알림으로 알린다 (설정에서 끌 수 있다). 누르면 작업 로그가 열린다
-const JOB_NAMES = { write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', render: '숏폼 렌더링' };
+const JOB_NAMES = { write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', render: '숏폼 렌더링', visit: '답방 준비' };
 function announce(job) {
   if (config.notify === false || !JOB_NAMES[job.type]) return;
   const what = job.input.topic || path.basename(job.input.postDir || job.input.dir || '') || '';
@@ -256,7 +262,7 @@ const safeName = (v) => String(v).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '
 const inShorts = (dir) => { const rel = path.relative(SHORTS(), path.resolve(dir)); return rel && !rel.startsWith('..') && !path.isAbsolute(rel); };
 const ttsOptions = () => ({ ...(config.tts || {}), chromePath: config.chromePath });
 
-function shortsPrompt({ topic, notes, files }) {
+function shortsPrompt({ topic, notes, files, titleStyle }) {
   return [
     '세로형(9:16) 정보 숏폼 영상 대본을 만든다. 결과는 이 폴더의 script.json 파일 하나다.',
     topic ? `주제: ${topic}` : '주제: 자료를 보고 정하라',
@@ -277,6 +283,7 @@ function shortsPrompt({ topic, notes, files }) {
     '- (선택) 장면 "focus": [가로%, 세로%] 줌인할 때 당겨 볼 지점(사진 속 가격표·얼굴 등). 기본 [50,45].',
     '- (선택) 문장 "move": punch(확 줌인) / zoomout(원래대로) / pan(옆으로 밀기) / shake(흔들기) / bounce(통통) / none. 비우면 tone에 맞춰 자동.',
     '- title 두 줄은 영상 내내 위에 고정된다. 가장 중요한 숫자나 이득을 *별표*로 강조.',
+    TITLE_STYLES[titleStyle] ? '' : `- "titleStyle": 주제·분위기에 맞는 제목 스타일 하나를 고른다: ${Object.entries(TITLE_STYLES).map(([id, s]) => `${id}(${s.name} — ${s.desc})`).join(', ')}.`,
     '- 자료에 없는 숫자·날짜·조건을 지어내지 마라.',
     '- media는 media/ 안 파일만. PDF는 핵심 페이지를 PNG로 media/에 저장해 쓴다. 영상 파일은 그대로 써도 된다.',
     '- 맞는 자료가 없는 장면은 이미지 생성이 가능하면 9:16 또는 1:1 이미지를 media/에 만들어 쓰고, 불가능하면 null.',
@@ -300,7 +307,11 @@ const jobTypes = {
     let script = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null'));
     if (!script) { script = lastJson(output); if (script) await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2)); }
     if (!script?.scenes?.length) throw new Error('script.json을 만들지 못했습니다');
-    if (job.input.font) script.font = job.input.font;
+    // 제목 스타일: 고른 것이 있으면 그것, '자동'이면 AI가 대본에 고른 것(없거나 틀리면 기본). 다시 렌더링해도 같게 script.json에 남긴다
+    if (TITLE_STYLES[job.input.titleStyle]) script.titleStyle = job.input.titleStyle;
+    else if (!TITLE_STYLES[script.titleStyle]) delete script.titleStyle;
+    if (job.input.font && !script.titleStyle) script.font = job.input.font;
+    await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
     log(`대본 장면 ${script.scenes.length}개 → 렌더링`);
     return { dir, video: await renderShort(dir, script, { tts: ttsOptions(), log }) };
   },
@@ -382,8 +393,47 @@ const jobTypes = {
     log(`추천 ${parsed.picks?.length || 0}개`);
     return { picks: parsed.picks?.length || 0 };
   },
-  async scrape(job, log) { log(`읽는 중: ${job.input.url}`); return naver.scrape(config, readerProfile(), job.input.url); }
+  async scrape(job, log) { log(`읽는 중: ${job.input.url}`); return naver.scrape(config, readerProfile(), job.input.url); },
+  // 댓글 답방 준비: 내소식에서 새 댓글 → 서로이웃만 → 그 사람의 최근 글 읽기 → AI가 초안. 보내기는 화면에서 사람이 누른다
+  async visit(job, log) {
+    const account = naverAccount(job.input.account);
+    const store = readJson('visits.json', visits.emptyStore());
+    log(`내소식에서 새 댓글 읽는 중 · ${account.name}`);
+    const comments = await onPage(account.profile, 'myNewsComments');
+    log(`  댓글 ${comments.length}개 중 새 댓글 ${visits.mergeComments(store, comments)}개`);
+    // 서로이웃 목록은 하루 한 번만 새로 읽는다(이웃이 많으면 여러 쪽이라 오래 걸린다)
+    if (!store.buddies.at || Date.now() - Date.parse(store.buddies.at) > 86400_000) {
+      log('서로이웃 목록 읽는 중');
+      store.buddies = { at: new Date().toISOString(), ids: await onPage(account.profile, 'mutualBuddies', account.blogId) };
+    }
+    log(`  서로이웃 ${store.buddies.ids.length}명`);
+    const targets = visits.pickTargets(store, { myBlogId: account.blogId, buddyIds: store.buddies.ids });
+    writeJson('visits.json', store);
+    if (!targets.length) { log('답방할 새 서로이웃 댓글이 없습니다'); return { drafted: 0 }; }
+    for (const t of targets) {
+      const latest = await visits.latestPost(t.author.blogId).catch((e) => { log(`  ${t.author.name}: 최근 글을 못 찾음 (${e.message})`); return null; });
+      if (!latest) { t.status = 'skipped'; t.reason = '최근 글을 찾지 못함'; continue; }
+      const page = await naver.scrape(config, readerProfile(), latest.url, 1500).catch(() => null);
+      t.target = { ...latest, text: page?.text?.replace(/\n{3,}/g, '\n\n').slice(0, 4000) || '' };
+      t.status = 'preparing';
+      log(`  ${t.author.name} → ${latest.title}`);
+    }
+    const ready = targets.filter((t) => t.status === 'preparing');
+    writeJson('visits.json', store);
+    if (!ready.length) return { drafted: 0 };
+    const engine = job.input.engine || config.engine;
+    log(`${engine}로 초안 ${ready.length}개 쓰는 중`);
+    const parsed = lastJson(await runAI({ ...config, codexEffort: config.codexEffort || 'medium' }, engine, visits.draftPrompt(ready), { cwd: DATA, log: () => {} }));
+    if (!parsed) throw new Error('AI 결과에서 초안을 찾지 못했습니다');
+    const drafted = visits.applyDrafts(store, parsed);
+    for (const t of ready) if (t.status === 'preparing') { t.status = 'skipped'; t.reason = 'AI가 초안을 주지 않음'; }
+    store.lastPrepare = new Date().toISOString();
+    writeJson('visits.json', store);
+    log(`초안 ${drafted}개 준비됨 — 댓글 답방 화면에서 확인하고 보내 주세요`);
+    return { drafted };
+  }
 };
+
 
 // ---- 숏텐츠: 자동 조회(기본 30분) + 저장 ----
 const SHORTENTS_FILE = path.join(DATA, 'shortents.json');
@@ -630,6 +680,43 @@ const routes = {
       nextFetch: minutes && st.lastFetch ? new Date(Date.parse(st.lastFetch) + minutes * 60_000).toISOString() : null, items };
   },
   // 핫 키워드: 주제별 목록 + 키워드마다 비슷한 글·글쓰기 작업 상태
+  // 댓글 답방: 목록(최근 것부터), 보내기(사람이 누름, 하루 상한·간격), 건너뛰기
+  'GET /api/visits': async () => {
+    const store = readJson('visits.json', visits.emptyStore());
+    const running = jobs.find((j) => j.type === 'visit' && j.status === 'running');
+    const list = Object.values(store.items).sort((a, b) => String(b.draftedAt || b.foundAt).localeCompare(String(a.draftedAt || a.foundAt)))
+      .slice(0, 100).map(({ target, ...it }) => ({ ...it, target: target && { title: target.title, url: target.url } }));
+    return { items: list, lastPrepare: store.lastPrepare, buddies: store.buddies.ids.length, busy: Boolean(running), limits: visits.LIMITS };
+  },
+  'POST /api/visits/send': async (req) => {
+    const { id, text } = await jsonBody(req);
+    const store = readJson('visits.json', visits.emptyStore());
+    const item = store.items[id];
+    const block = visits.sendBlock(store, item);
+    if (block) throw new Error(block);
+    const body = String(text || '').trim();
+    if (body.length < 5 || body.length > 300) throw new Error('댓글은 5~300자로 써 주세요');
+    const account = naverAccount();
+    await onPage(account.profile, 'postComment', item.target.url, body);
+    Object.assign(item, { status: 'sent', sentText: body, sentAt: new Date().toISOString(), error: '' });
+    writeJson('visits.json', store);
+    return { ok: true };
+  },
+  // 조사용(읽기만): 내소식·이웃 관리·댓글 화면 구조를 data/visit-probe.json에 남긴다. ?post=<답방해 볼 글 주소>
+  'POST /api/visits/probe': async (req, res, url) => {
+    const account = naverAccount();
+    const out = await onPage(account.profile, 'probe', { blogId: account.blogId, postUrl: url.searchParams.get('post') || '' });
+    writeJson('visit-probe.json', out);
+    return { saved: 'data/visit-probe.json', news: out.news.length, newsDom: out.newsDom.length, buddy: Boolean(out.buddy?.row), comment: Boolean(out.comment?.write) };
+  },
+  'POST /api/visits/skip': async (req) => {
+    const { id } = await jsonBody(req);
+    const store = readJson('visits.json', visits.emptyStore());
+    if (!store.items[id]) throw new Error('답방 항목이 없습니다');
+    Object.assign(store.items[id], { status: 'skipped', reason: '직접 건너뜀' });
+    writeJson('visits.json', store);
+    return { ok: true };
+  },
   'GET /api/hotkeywords': async () => {
     const st = readJson('hotkeywords.json', {});
     const posts = await listPosts();
@@ -732,6 +819,7 @@ const routes = {
     if (type === 'write' && !String(input.topic || '').trim()) throw new Error('주제가 비었습니다');
     if (type === 'write') needRoot(rootOf(naverAccountOrNone(input.account)));
     if (['shorts', 'render', 'discover'].includes(type)) needRoot();
+    if (type === 'visit' && jobs.some((j) => j.type === 'visit' && j.status === 'running')) throw new Error('답방 준비가 이미 진행 중입니다');
     return startJob(type, input, jobTypes[type]);
   },
   // 첨부: 파일 하나를 원본 바이트로 받는다. 저장 위치는 블로그 루트 tmp (AI가 읽을 수 있는 곳)
