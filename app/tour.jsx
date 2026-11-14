@@ -93,6 +93,11 @@ export const TOURS = {
       '**이 주제로 쓰기**를 누르면 글 생성하기에 주제와 분류가 채워집니다.'
     ] }
   ],
+  campaigns: [
+    { target: 'campaign-filter', title: '나에게 맞는 체험단 찾기', body: ['업체명·지역·제공 내역으로 검색하고, **지역·유형·카테고리·사이트·마감** 조건을 조합하세요.', '선택한 조건은 주소에 남아 새로고침하거나 링크를 다시 열어도 유지됩니다.'] },
+    { target: 'campaign-results', title: '공고를 비교하고 즐겨찾기', body: ['**카드/표**로 보기를 바꾸고 마감·경쟁률·모집 인원 순으로 비교하세요. 경쟁률 미공개 공고는 뒤에 표시됩니다.', '공고 제목을 누르면 **원본 사이트가 새 탭**으로 열립니다. 신청은 원본에서 직접 진행하세요. 별을 누르면 이 PC에 즐겨찾기로 저장됩니다.'] },
+    { target: 'campaign-sources', title: '사이트와 수집 상태', body: ['**지금 수집하기**로 새 목록을 받습니다. 서버가 켜져 있으면 한국 시간 06~24시에 3시간마다 자동 수집합니다.', '수집이 제한된 사이트는 **원본 바로가기**를 제공합니다. 사이트 수집을 끄면 해당 공고를 숨깁니다.'] }
+  ],
   shortents: [
     { target: 'shortents-filter', title: '숏텐츠 모아 보기', body: [
       '네이버 검색창의 숏텐츠(20개)와 분류별 숏텐츠(엔터·부동산·증권·여행맛집·리빙푸드·패션뷰티·카테크·스포츠·영화·드라마, 각 5개)를 자동으로 받아 둡니다.',
@@ -181,7 +186,7 @@ export const TOURS = {
   ]
 };
 // 화면 → 그 화면 안내
-export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', write: 'write', shorts: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
+export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', campaigns: 'campaigns', write: 'write', shorts: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
 
 const GAP = 14, W = 400;
 export function Tour({ steps, onClose, go }) {

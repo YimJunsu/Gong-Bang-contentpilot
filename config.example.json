@@ -1,5 +1,6 @@
 {
   "port": 5999,
+  "lanHost": "",
   "blogRoot": "",
   "engine": "codex",
   "headless": true,

@@ -16,6 +16,10 @@ import { pathToFileURL } from 'node:url';
 // 네이버 화면을 다루는 답방 코드는 부를 때마다 새로 읽는다(고쳐도 서버 재시작 없이 반영 — 재시작하면 로그인이 풀릴 수 있어서)
 const nvVisits = () => import(`${pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'naver-visits.mjs')).href}?v=${Date.now()}`);
 const onPage = async (profile, name, ...args) => { const mod = await nvVisits(); return naver.usePage(config, profile, (page) => mod[name](page, ...args)); };
+import { reelPrompt, validateReel, validateImages, assignMedia, normalizeTopics } from './reel.mjs';
+import { createCampaignService } from './campaigns.mjs';
+import { searchVideos, videoInfo, download, contactSheets, pickPrompt, pickIds, scriptPrompt, validateClip, withCredits, renderClip, youtubeUrl } from './clip.mjs';
+import { networkSettings } from './network.mjs';
 import { createReadStream } from 'node:fs';
 import { spawn } from 'node:child_process';
 
@@ -37,6 +41,9 @@ const writeJson = (file, value) => writeFileSync(path.join(DATA, file), JSON.str
 const state = readJson('state.json', { drafted: {} });
 state.accounts ||= {}; // 계정 id → 마지막 세션 확인 결과
 const saveState = () => writeJson('state.json', state);
+const campaigns = createCampaignService(path.join(DATA, 'campaigns.json'), {
+  onAlert: (message) => { if (config.notify !== false) notify('체험단 수집 확인', message, `http://localhost:${config.port}/campaigns`); }
+});
 
 // ---- 계정: 네이버(여러 개, 계정마다 크롬 프로필 폴더) · 인스타그램 · 스레드 ----
 // 비밀번호·쿠키는 저장하지 않는다. 네이버 로그인은 사람이 직접 하고 크롬 프로필에 남는다. 인스타·스레드는 아직 이름·아이디만 적어 둔다.
@@ -112,7 +119,7 @@ function startJob(type, input, work) {
 }
 
 // 끝난 작업을 Windows 알림으로 알린다 (설정에서 끌 수 있다). 누르면 작업 로그가 열린다
-const JOB_NAMES = { write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', render: '숏폼 렌더링', visit: '답방 준비' };
+const JOB_NAMES = { write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비' };
 function announce(job) {
   if (config.notify === false || !JOB_NAMES[job.type]) return;
   const what = job.input.topic || path.basename(job.input.postDir || job.input.dir || '') || '';
@@ -292,6 +299,40 @@ function shortsPrompt({ topic, notes, files, titleStyle }) {
 }
 
 const jobTypes = {
+  async reel(job, log) {
+    const dir = path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(job.input.topic)}-${job.id.slice(-4)}`);
+    await fs.mkdir(path.join(dir, 'media'), { recursive: true });
+    job.result = { dir }; saveJobs();
+    const files = [];
+    for (const [i, file] of (job.input.files || []).entries()) {
+      const ext = path.extname(file).toLowerCase();
+      const name = `media/upload-${String(i + 1).padStart(2, '0')}${ext}`;
+      await fs.copyFile(file, path.join(dir, name));
+      files.push(name);
+    }
+    log('Codex로 대본과 장면 설명 작성 중');
+    const output = await runAI(config, 'codex', reelPrompt(job.input), { cwd: dir, log });
+    let script = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null'));
+    if (!script) script = lastJson(output);
+    validateReel(script, job.input.narration || '');
+    if (files.length) assignMedia(script.scenes, files);
+    else script.scenes.forEach((scene, i) => { scene.media = `media/scene-${String(i + 1).padStart(2, '0')}.png`; });
+    await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    if (!files.length) {
+    log(`Codex 이미지 생성 · ${script.scenes.length}장`);
+    const imagePrompt = [
+      '내장 image_gen.imagegen 도구를 이용해 아래 장면마다 서로 다른 이미지를 각각 한 장 생성한다.',
+      '각 이미지는 글자나 로고 없는 세로 영상용 삽화이며 일관된 시각 스타일을 유지한다.',
+      '도구가 생성한 실제 이미지 파일을 지정된 media 경로에 PNG로 복사한다. 대체 이미지, 코드로 그린 그림, 빈 파일을 쓰지 않는다.',
+      '현재 작업 폴더 밖의 파일은 수정하지 않는다. 도구를 사용할 수 없거나 생성에 실패하면 실패를 보고하고 중단한다. script.json은 수정하지 않는다.',
+      ...script.scenes.map((scene) => `${scene.media}: ${scene.image_prompt}`)
+    ].join('\n');
+    await runAI(config, 'codex', imagePrompt, { cwd: dir, log });
+    await validateImages(dir, script.scenes);
+    } else log(`첨부한 이미지·영상 ${files.length}개를 장면 순서대로 사용합니다`);
+    log('이미지 확인 완료 · 음성과 영상 합성 중');
+    return { dir, video: await renderShort(dir, script, { tts: ttsOptions(), log }) };
+  },
   async shorts(job, log) {
     // 다시 생성이면 원래 폴더에서(대본·영상은 새로 만든다), 처음이면 새 폴더
     const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
@@ -318,7 +359,52 @@ const jobTypes = {
   async render(job, log) {
     if (!inShorts(job.input.dir)) throw new Error('숏폼 폴더가 아닙니다');
     const script = parseJson(await fs.readFile(path.join(job.input.dir, 'script.json'), 'utf8'));
+    if (script.layout === 'clip') return { dir: job.input.dir, video: await renderClip(job.input.dir, script, { chromePath: config.chromePath, log }) };
     return { dir: job.input.dir, video: await renderShort(job.input.dir, script, { tts: ttsOptions(), log }) };
+  },
+  // 클립 숏폼(docs/클립-숏폼-설계.md): 원본 찾기 → 받기 → 장면 모음 그림 → AI 구간·자막 → 렌더
+  async clip(job, log) {
+    const { topic, urls = [] } = job.input;
+    // 다시 생성이면 원래 폴더에서(받아 둔 원본은 yt-dlp가 다시 받지 않는다)
+    const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
+    const dir = again ? job.input.dir : path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(topic)}-${job.id.slice(-4)}`);
+    await fs.mkdir(path.join(dir, 'src'), { recursive: true });
+    job.result = { dir }; saveJobs();
+    const engine = job.input.engine || config.engine;
+    let infos;
+    if (urls.length) {
+      log(`넣은 영상 ${urls.length}개 정보 읽는 중`);
+      infos = [];
+      for (const url of urls) infos.push(await videoInfo(config, url));
+    } else {
+      log(`유튜브에서 찾는 중: ${topic}`);
+      // ponytail: 저작권 기본값(가) — 자동 찾기는 인증 배지가 있는 채널만. 큰 팬 채널도 인증일 수 있어 '공식' 보장은 아니다
+      const found = (await searchVideos(config, topic)).filter((v) => v.verified);
+      if (!found.length) throw new Error('인증된(공식) 채널 영상을 찾지 못했습니다. 영상 주소를 직접 넣어 주세요');
+      log(`후보 ${found.length}개 → ${engine}로 고르는 중`);
+      const picks = pickIds(lastJson(await runAI(config, engine, pickPrompt(job.input, found), { cwd: dir, log })), found);
+      infos = [];
+      for (const v of picks) infos.push(await videoInfo(config, v.url));
+    }
+    const sources = [];
+    for (const [i, info] of infos.entries()) {
+      const n = i + 1;
+      log(`원본 ${n} 받는 중: ${info.channel} · ${info.title}`);
+      // 파일 이름은 영상 id로: 다시 생성 때 같은 영상이면 받지 않고, 다른 영상이 남은 파일을 대신 쓰지 않게
+      const file = await download(config, info.url, path.join(dir, 'src', info.id), log);
+      const sheets = await contactSheets(file, path.join(dir, 'src', `sheet-${info.id}`));
+      sources.push({ n, url: info.url, title: info.title, channel: info.channel, duration: info.duration, hot: info.hot, sheets, file: path.relative(dir, file) });
+    }
+    log(`${engine}로 구간·자막 고르는 중`);
+    await fs.rm(path.join(dir, 'script.json'), { force: true });
+    const output = await runAI(config, engine, scriptPrompt(job.input, sources), { cwd: dir, log });
+    const raw = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null')) || lastJson(output);
+    const kept = sources.map(({ n, url, title, channel, duration, file }) => ({ n, url, title, channel, duration, file }));
+    const script = { ...validateClip(raw, kept), sources: kept, mute: Boolean(job.input.mute) };
+    script.description = withCredits(script.description, kept);
+    await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    log(`구간 ${script.scenes.length}개 → 렌더링`);
+    return { dir, video: await renderClip(dir, script, { chromePath: config.chromePath, log }) };
   },
   async write(job, log) {
     const since = Date.now() - 5000;
@@ -596,6 +682,10 @@ const toRecycleBin = (target) => new Promise((resolve, reject) => {
 });
 
 const routes = {
+  'GET /api/campaigns': async (req, res, url) => campaigns.list(url.searchParams),
+  'GET /api/campaigns/filters': async () => campaigns.filters(),
+  'GET /api/admin/sources': async () => campaigns.status(),
+  'POST /api/campaigns/refresh': async () => { campaigns.refresh().catch((e) => console.error('체험단 저장 오류:', e.message)); return { busy: true }; },
   'GET /api/state': async () => {
     const root = curRoot();
     return {
@@ -781,6 +871,25 @@ const routes = {
     res.setHeader('Cache-Control', 'max-age=86400');
     send(res, 200, await fs.readFile(path.join(HERE, 'assets', 'fonts', face.file)), 'font/ttf');
   },
+  'POST /api/reel/topics': async (req) => {
+    const input = await jsonBody(req);
+    const style = input.style === 'story' ? '이야기형' : '정보형';
+    const interest = String(input.interest || '').trim().slice(0, 300);
+    const hot = readJson('hotkeywords.json', {});
+    const short = readJson('shortents.json', {});
+    const keywords = (hot.categories || []).flatMap((c) => (c.items || []).slice(0, 3).map((k) => `${c.category}: ${k.query}`)).slice(0, 90);
+    const shortTitles = (short.current || []).map((id) => short.items?.[id]?.title).filter(Boolean).slice(0, 30);
+    const prompt = [
+      `한국어 릴스·쇼츠 ${style} 영상 주제를 6개 추천한다.`,
+      interest ? `사용자의 관심 분야: ${interest}. 이 관심 분야를 우선한다.` : '다양한 일상·사회·생활 주제를 제안한다.',
+      '구체적인 질문이나 상황으로 표현하고, 중복·과장·확인되지 않은 사실을 피한다. 참고 자료는 영감으로만 쓰고 현재 인기나 수치를 지어내지 않는다.',
+      '파일은 수정하지 말고 JSON만 출력한다: {"topics":[{"topic":"영상 주제", "reason":"흥미로운 관점 한 문장"}]}',
+      `저장된 핫 키워드 (기준 ${hot.date || '미상'}): ${keywords.join(', ') || '없음'}`,
+      `저장된 숏텐츠 (수집 ${short.lastFetch || '미상'}): ${shortTitles.join(' / ') || '없음'}`
+    ].join('\n');
+    const output = await runAI(config, 'codex', prompt, { cwd: HERE });
+    return { topics: normalizeTopics(lastJson(output)), hotDate: hot.date || null, shortFetchedAt: short.lastFetch || null };
+  },
   'GET /api/shorts': async () => {
     const out = [];
     for (const name of await fs.readdir(SHORTS()).catch(() => [])) {
@@ -810,6 +919,23 @@ const routes = {
     res.writeHead(206, { 'Content-Type': 'video/mp4', 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes' });
     createReadStream(file, { start, end }).pipe(res);
   },
+  // 클립 숏폼 점검 그림(완성본 1초 간격 모음)
+  'GET /api/shorts/check': async (req, res, url) => {
+    const dir = url.searchParams.get('dir') || '';
+    if (!inShorts(dir)) return send(res, 403, { error: 'forbidden' });
+    send(res, 200, await fs.readFile(path.join(dir, 'check.jpg')), 'image/jpeg');
+  },
+  // 사람이 유튜브에 올렸다고 표시한다(주소는 선택). uploaded:false면 '올릴 차례'로 되돌림
+  'POST /api/shorts/uploaded': async (req) => {
+    const { dir, uploaded, url = '' } = await jsonBody(req);
+    if (!inShorts(dir)) throw new Error('숏폼 폴더가 아닙니다');
+    if (url && !youtubeUrl(url)) throw new Error('유튜브 주소가 아닙니다');
+    const file = path.join(dir, 'script.json');
+    const script = parseJson(await fs.readFile(file, 'utf8'));
+    if (uploaded) script.uploaded = { url: url.trim(), at: new Date().toISOString() }; else delete script.uploaded;
+    await fs.writeFile(file, JSON.stringify(script, null, 2));
+    return { ok: true };
+  },
   'GET /api/jobs': async () => jobs.slice(0, 50),
   // 끝난 작업(완료·실패) 기록을 한꺼번에 지운다. 진행 중은 남긴다
   'POST /api/jobs/clear': async () => { jobs.filter((j) => j.status !== 'running').forEach(removeJob); return { ok: true }; },
@@ -817,8 +943,23 @@ const routes = {
     const { type, ...input } = JSON.parse(await body(req));
     if (!jobTypes[type]) throw new Error(`알 수 없는 작업: ${type}`);
     if (type === 'write' && !String(input.topic || '').trim()) throw new Error('주제가 비었습니다');
+    if (type === 'reel' && !String(input.topic || '').trim()) throw new Error('주제를 입력해 주세요');
+    if (type === 'reel') {
+      if (!Array.isArray(input.files || []) || (input.files || []).length > 8) throw new Error('이미지와 영상은 최대 8개까지 넣을 수 있습니다');
+      for (const file of input.files || []) {
+        if (typeof file !== 'string' || !/\.(jpe?g|png|webp|gif|mp4|webm)$/i.test(file)) throw new Error('지원하지 않는 이미지 또는 영상 형식입니다');
+        const uploadRoot = path.join(needRoot(), 'tmp', 'contentpilot');
+        const realFile = await fs.realpath(file).catch(() => '');
+        const realRoot = await fs.realpath(uploadRoot).catch(() => '');
+        if (!realFile || !realRoot || !inside(realRoot, realFile)) throw new Error('첨부 파일을 찾을 수 없습니다. 다시 넣어 주세요');
+      }
+    }
+    if (type === 'clip') {
+      if (!String(input.topic || '').trim()) throw new Error('인물이나 화제를 입력해 주세요');
+      if (!Array.isArray(input.urls || []) || (input.urls || []).length > 3 || (input.urls || []).some((u) => !youtubeUrl(u))) throw new Error('영상 주소는 유튜브 주소로 3개까지 넣어 주세요');
+    }
     if (type === 'write') needRoot(rootOf(naverAccountOrNone(input.account)));
-    if (['shorts', 'render', 'discover'].includes(type)) needRoot();
+    if (['shorts', 'reel', 'render', 'discover', 'clip'].includes(type)) needRoot();
     if (type === 'visit' && jobs.some((j) => j.type === 'visit' && j.status === 'running')) throw new Error('답방 준비가 이미 진행 중입니다');
     return startJob(type, input, jobTypes[type]);
   },
@@ -836,19 +977,38 @@ const routes = {
 
 // 화면은 Next(React). /api만 여기서 처리하고 나머지는 Next에 넘긴다 — 포트 하나, 작업 상태는 이 프로세스에 유지.
 const dev = process.argv.includes('--dev');
-const ui = next({ dev, dir: HERE, hostname: 'localhost', port: config.port });
+const network = networkSettings(config);
+const ui = next({ dev, dir: HERE, hostname: network.hostname, port: config.port, conf: { allowedDevOrigins: network.allowedDevOrigins } });
 const uiHandle = ui.getRequestHandler();
 await ui.prepare();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   // AI를 권한 우회로 돌리는 서버다. 다른 사이트가 이 포트로 요청을 쏘지 못하게 막는다:
-  // Host 검사 = DNS 리바인딩 차단, 커스텀 헤더 = 교차 출처 POST는 사전요청에서 막힘(CSRF 차단).
-  const hostOk = new RegExp(`^(localhost|127\\.0\\.0\\.1):${config.port}$`).test(req.headers.host || '');
-  if (!hostOk) return send(res, 403, { error: 'forbidden' });
+  // 명시한 LAN IP와 로컬 Host만 허용한다. Origin 검사와 쓰기 헤더 검사를 함께 유지한다.
+  if (!network.accepts(req.headers)) return send(res, 403, { error: 'forbidden' });
   if (!url.pathname.startsWith('/api/')) return uiHandle(req, res);
   if (req.method !== 'GET' && req.headers['x-bh'] !== '1') return send(res, 403, { error: 'forbidden' });
   try {
+    const campaignAction = url.pathname.match(/^\/api\/campaigns\/([\w-]+)\/(go|bookmark)$/);
+    if (campaignAction) {
+      const [, id, action] = campaignAction;
+      if (action === 'go' && req.method === 'GET') {
+        const target = campaigns.go(id);
+        if (!target) return send(res, 404, { error: '공고가 없습니다' });
+        res.writeHead(302, { Location: target, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+        return res.end();
+      }
+      if (action === 'bookmark' && ['POST', 'DELETE'].includes(req.method)) return send(res, 200, campaigns.bookmark(id, req.method === 'POST'));
+      return send(res, 405, { error: '지원하지 않는 요청입니다' });
+    }
+    const sourceAction = url.pathname.match(/^\/api\/admin\/sources\/([\w-]+)(\/run)?$/);
+    if (sourceAction && req.method === 'POST') {
+      const [, id, run] = sourceAction;
+      if (!campaigns.sources().some(s => s.id === id)) return send(res, 404, { error: '사이트가 없습니다' });
+      if (run) { campaigns.refresh(id).catch((e) => console.error('체험단 저장 오류:', e.message)); return send(res, 202, { busy: campaigns.busy }); }
+      return send(res, 200, campaigns.toggle(id, (await jsonBody(req)).enabled));
+    }
     // 글 미리보기: /api/postfile/<글 폴더(base64url)>/<폴더 안 파일>. 폴더만 주면 HTML을 연다.
     // 경로 모양이라 HTML 속 상대 경로(assets/…)가 그대로 풀린다. 작업 폴더 안 글 폴더(meta.json 있음)의 파일만, 스크립트는 막는다
     const postFile = url.pathname.match(/^\/api\/postfile\/([\w-]+)\/(.*)$/);
@@ -892,7 +1052,7 @@ const server = http.createServer(async (req, res) => {
         const rewrite = Boolean(reviseDir) && !(how === 'revise' && job.status === 'done');
         input = { ...base, ...(note ? { feedback: note } : {}), ...(reviseDir ? { reviseDir } : {}), ...(rewrite ? { rewrite } : {}), ...(typeof wantDraft === 'boolean' ? { draft: wantDraft } : {}) };
       }
-      if (job.type === 'shorts' && dir && inShorts(dir) && existsSync(dir)) input = { ...job.input, dir };
+      if (['shorts', 'clip'].includes(job.type) && dir && inShorts(dir) && existsSync(dir)) input = { ...job.input, dir };
       const again = mode === 'render' && dir ? startJob('render', { dir }, jobTypes.render) : startJob(job.type, input, jobTypes[job.type]);
       return send(res, 200, again);
     }
@@ -904,5 +1064,18 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) send(res, 500, { error: error.message });
   }
 });
-if (dev) server.on('upgrade', ui.getUpgradeHandler()); // 개발 모드 핫리로드
-server.listen(config.port, '127.0.0.1', () => console.log(`contentpilot: http://localhost:${config.port}${dev ? ' (dev)' : ''}`));
+if (dev) server.on('upgrade', (req, socket, head) => {
+  if (!network.accepts(req.headers)) return socket.destroy();
+  return ui.getUpgradeHandler()(req, socket, head);
+});
+server.listen(config.port, network.listenHost, () => {
+  console.log(`contentpilot: http://localhost:${config.port}${dev ? ' (dev)' : ''}`);
+  if (config.lanHost) console.log(`LAN: http://${config.lanHost}:${config.port}`);
+});
+// PC가 켜진 동안만 실행한다. 한국 시간 06~24시, 출처별 마지막 시도에서 3시간 이후.
+function collectCampaignsDue() {
+  const hour = new Date(Date.now() + 9 * 3600_000).getUTCHours();
+  if (hour >= 6) campaigns.refresh(undefined, true).catch((e) => console.error('체험단 저장 오류:', e.message));
+}
+setTimeout(collectCampaignsDue, 20_000).unref();
+setInterval(collectCampaignsDue, 60_000).unref();

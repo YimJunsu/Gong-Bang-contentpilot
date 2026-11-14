@@ -60,7 +60,7 @@ export function pauseAfter(text, nextTone) {
 }
 const toneOf = (t) => (TONES[t] ? t : 'normal');
 
-function ffmpeg(args, log = () => {}) {
+export function ffmpeg(args, log = () => {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpegPath, ['-hide_banner', '-y', ...args], { windowsHide: true });
     let err = '';
@@ -80,7 +80,7 @@ async function loudness(file, filter = '') {
   const value = m ? Number(m[1]) : NaN;
   return Number.isFinite(value) && value > -70 ? value : -18;
 }
-async function duration(file) {
+export async function duration(file) {
   const out = await ffmpeg(['-i', file, '-f', 'null', '-'], () => {}).catch((e) => String(e));
   const m = [...String(out).matchAll(/time=(\d+):(\d+):([\d.]+)/g)].pop() || String(out).match(/Duration: (\d+):(\d+):([\d.]+)/);
   return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : 0;

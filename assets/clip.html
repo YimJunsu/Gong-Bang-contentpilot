@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- 클립 숏폼 글자판. clip.mjs가 장면마다 setup()을 부르고 배경 없이(투명) 찍어 원본 영상 위에 얹는다.
+     위 0~440px = 검은 띠(제목), 아래는 영상. 자막은 영상 아래쪽에 겹친다. -->
+<style>
+  html, body { margin:0; width:1080px; height:1920px; overflow:hidden; background:transparent; }
+  #band { position:absolute; left:0; top:0; width:1080px; height:440px; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
+  .t1 { font-family:T; font-size:92px; line-height:1.1; color:#fff; letter-spacing:-2px; text-align:center; padding:0 40px; }
+  .t2 { font-family:T; font-size:92px; line-height:1.1; color:#fff; letter-spacing:-2px; text-align:center; background:#e5007d; padding:6px 26px 12px; border-radius:6px; }
+  .t1 em, .t2 em { font-style:normal; color:#ffe600; }
+  #credit { position:absolute; right:24px; top:464px; padding:6px 16px; border-radius:8px; background:rgba(0,0,0,.55); color:#fff; font:30px B; }
+  #cap { position:absolute; left:50px; right:50px; bottom:150px; text-align:center; word-break:keep-all; }
+  .c1 { font-family:B; font-size:72px; line-height:1.25; color:#fff; -webkit-text-stroke:14px #000; paint-order:stroke fill; }
+  .c2 { margin-top:10px; font-family:B; font-size:50px; line-height:1.25; color:#ffe600; -webkit-text-stroke:11px #000; paint-order:stroke fill; }
+  .c1 em, .c2 em { font-style:normal; color:#ffe600; }
+  .c2 em { color:#fff; }
+</style></head>
+<body>
+  <div id="band"></div>
+  <div id="credit"></div>
+  <div id="cap"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const marked = (text) => esc(text).replace(/\*(.+?)\*/g, '<em>$1</em>');
+let loaded = false;
+window.setup = async ({ fonts, title, caption, sub, credit }) => {
+  if (!loaded) {
+    for (const [family, url] of Object.entries(fonts)) { const f = new FontFace(family, `url("${url}")`); await f.load(); document.fonts.add(f); }
+    loaded = true;
+  }
+  const [a = '', b = ''] = title;
+  $('#band').innerHTML = `${a ? `<div class="t1">${marked(a)}</div>` : ''}${b ? `<div class="t2">${marked(b)}</div>` : ''}`;
+  $('#credit').style.display = credit ? '' : 'none';
+  $('#credit').textContent = credit || '';
+  $('#cap').innerHTML = `${caption ? `<div class="c1">${marked(caption)}</div>` : ''}${sub ? `<div class="c2">${marked(sub)}</div>` : ''}`;
+  await document.fonts.ready;
+};
+</script></body></html>

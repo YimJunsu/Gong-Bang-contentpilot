@@ -15,6 +15,7 @@
   --radius: 14px;
 }
 
+
 * { box-sizing: border-box; }
 html { background: var(--ground); }
 body {
@@ -378,3 +379,125 @@ dialog.modal.retry { width: min(620px, 94vw); }
 .visit-quote { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--line); background: var(--ground); border-radius: 6px; font-size: 14px; }
 .visit-target { margin-bottom: 8px; font-size: 14px; }
 .visit textarea { min-height: 76px; margin-bottom: 8px; }
+
+/* 체험단: 기존 화면의 색·입력칸·간격을 그대로 사용한다. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.campaign-search { display: flex; gap: 8px; align-items: center; }
+.campaign-search > label { flex: 1; min-width: 0; }
+.campaign-search input { width: 100%; }
+.campaign-desktop-filter { margin-top: 18px; }
+.campaign-filter-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.campaign-pick { position: relative; min-width: 130px; }
+.campaign-pick > summary { cursor: pointer; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 7px 12px; font-size: 14px; font-weight: 700; }
+.campaign-pick-options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 290px; max-width: 80vw; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; box-shadow: 0 12px 30px #17201b18; }
+.campaign-pick-options label { display: flex; align-items: center; gap: 8px; padding: 7px 6px; font-size: 14px; cursor: pointer; }
+.campaign-pick-options label:has(input:disabled) { color: var(--muted); }
+.campaign-pick-options small { margin-left: auto; color: var(--muted); }
+.campaign-pick-options input, .campaign-checks input { width: 16px; height: 16px; padding: 0; margin: 0; accent-color: var(--green-ink); }
+.campaign-chip-field { display: flex; min-width: 0; gap: 14px; border: 0; padding: 0; margin: 14px 0; }
+.campaign-chip-field legend { float: left; flex: none; width: 66px; padding-top: 6px; font-size: 13.5px; font-weight: 700; color: var(--muted); }
+.campaign-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.campaign-chips .btn { height: 32px; padding: 0 12px; font-size: 13px; font-weight: 600; }
+.campaign-chips .btn.selected { color: var(--green-ink); border-color: var(--green-ink); background: var(--green-soft); }
+.campaign-checks { display: flex; flex-wrap: wrap; gap: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.campaign-checks label { display: inline-flex; gap: 7px; align-items: center; font-size: 13.5px; cursor: pointer; }
+.campaign-active { padding-top: 8px; }
+.campaign-results-bar { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin: 22px 0 16px; }
+.campaign-results-bar > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.campaign-total { color: var(--green-ink); margin-left: 5px; }
+.campaign-results-bar select { width: auto; }
+.campaign-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 18px; }
+.campaign-card { min-width: 0; display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.campaign-card:hover { border-color: var(--green-ink); }
+.campaign-card > a { display: block; flex: 1; color: inherit; text-decoration: none; }
+.campaign-image { position: relative; aspect-ratio: 16 / 10; background: #e9eee8; overflow: hidden; }
+.campaign-image img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; }
+.campaign-image-fallback { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; font-weight: 800; color: var(--muted); }
+.campaign-dday { position: absolute; z-index: 2; top: 12px; right: 12px; padding: 3px 9px; border-radius: 6px; background: var(--paper); color: var(--ink); font-weight: 800; font-size: 12px; }
+.campaign-dday.urgent { background: var(--red); color: white; }
+.campaign-card-body { padding: 16px 18px 12px; }
+.campaign-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12px; color: var(--muted); }
+.campaign-meta b { color: var(--green-ink); font-weight: 800; }
+.campaign-card h2 { margin: 9px 0 6px; font-size: 17px; font-weight: 800; line-height: 1.5; min-height: 51px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.campaign-reward { margin: 0 0 12px; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-tags { display: flex; gap: 6px; min-height: 23px; }
+.campaign-tags span { font-size: 11px; font-weight: 700; background: var(--ground); padding: 2px 7px; border-radius: 6px; }
+.campaign-card-foot { margin: 0 18px; padding: 12px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--line); font-size: 12px; }
+.campaign-card-foot small, .campaign-table td small { display: block; color: var(--muted); font-size: 11px; }
+.campaign-star { border: 0; background: none; color: var(--muted); cursor: pointer; width: 38px; height: 38px; flex: none; font-size: 27px; line-height: 1; border-radius: 10px; }
+.campaign-star:hover, .campaign-star.on { color: var(--green-ink); background: var(--green-soft); }
+.campaign-star:disabled { opacity: .5; cursor: wait; }
+.campaign-table-panel { padding: 8px 18px; }
+.campaign-table { min-width: 850px; width: 100%; }
+.campaign-table th button { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.campaign-table td { font-size: 13px; }
+.campaign-table td:first-child { white-space: nowrap; }
+.campaign-table td:nth-child(2) { width: 36%; min-width: 230px; }
+.campaign-table a { display: block; color: inherit; text-decoration: none; }
+.campaign-table a:hover b { color: var(--green-ink); text-decoration: underline; }
+.campaign-table a span { display: block; color: var(--muted); font-size: 12px; }
+.campaign-urgent-text { color: var(--red) !important; }
+.campaign-pagination { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 22px 0; }
+.campaign-disclosure { margin: 20px 0; }
+.campaign-sources > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.campaign-sources > summary::before { content: '＋'; color: var(--green-ink); font-weight: 800; }
+.campaign-sources[open] > summary::before { content: '−'; }
+.campaign-source { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); padding: 16px 0; }
+.campaign-source > div:first-child { min-width: 0; }
+.campaign-source a { color: var(--ink); text-decoration: none; }
+.campaign-source a:hover { text-decoration: underline; }
+.campaign-source small { display: block; font-size: 12px; color: var(--muted); }
+.campaign-source .row { flex: none; gap: 6px; }
+.campaign-logs { border-top: 1px solid var(--line); padding-top: 12px; font-size: 12px; }
+.campaign-logs summary { cursor: pointer; font-size: 14px; }
+.campaign-logs p { overflow-wrap: anywhere; }
+.campaign-error { border-color: var(--red); }
+.campaign-skeleton { border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); padding-bottom: 24px; overflow: hidden; }
+.campaign-skeleton > div { aspect-ratio: 16 / 10; background: var(--line); }
+.campaign-skeleton > span { display: block; margin: 20px 18px 0; height: 16px; background: var(--ground); border-radius: 6px; }
+.campaign-row-skeleton { height: 40px; background: var(--ground); border-radius: 6px; }
+.campaign-mobile-filter { display: none; }
+.campaign-filter-sheet { padding: 0; width: min(100%, 640px); max-width: 100%; max-height: 88dvh; margin: auto auto 0; border: 1px solid var(--line); border-radius: 18px 18px 0 0; color: var(--ink); background: var(--paper); }
+.campaign-filter-sheet::backdrop { background: #17201b73; }
+.campaign-sheet-body { padding: 20px; }
+.campaign-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.campaign-sheet-head h2 { font-size: 20px; margin: 0; }
+.campaign-sheet-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 0 max(0px, env(safe-area-inset-bottom)); margin-top: 18px; border-top: 1px solid var(--line); }
+@media (max-width: 860px) {
+  .campaign-desktop-filter { display: none; }
+  .campaign-mobile-filter { display: inline-flex; }
+  .campaign-search-panel { padding: 16px; }
+  .campaign-search input { font-size: 14px; min-width: 0; }
+  .campaign-search .btn { padding: 0 10px; }
+  .campaign-results-bar > .row { justify-content: space-between; width: 100%; }
+  .campaign-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+  .campaign-filter-sheet .campaign-pick { min-width: 100px; flex: 1; }
+  .campaign-filter-sheet .campaign-pick-options { position: static; width: 100%; max-width: 100%; margin-top: 6px; box-shadow: none; }
+  .campaign-filter-sheet .campaign-filter-line { align-items: flex-start; }
+  .campaign-filter-sheet .campaign-filter-line > small { flex-basis: 100%; }
+  .campaign-chip-field { display: block; }
+  .campaign-chip-field legend { float: none; width: auto; padding: 0 0 7px; }
+  .campaign-source { align-items: flex-start; flex-wrap: wrap; }
+  .campaign-sources { padding: 18px; }
+}
+
+.campaign-table-panel > .table-wrap { overflow-x: auto; }
+
+/* ---- 클립 숏폼: 왼쪽 편 목록 + 오른쪽 보고 올리기 ---- */
+.clip-board { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+.clip-list { display: flex; flex-direction: column; gap: 8px; max-height: 80vh; overflow-y: auto; }
+.clip-item { display: flex; gap: 12px; align-items: flex-start; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.clip-item:hover { background: var(--ground); }
+.clip-item.on { border-color: var(--green); background: var(--green-soft); }
+.clip-item .status { margin-top: 6px; }
+.clip-thumb { flex: none; width: 54px; height: 96px; border-radius: 8px; background: var(--ink); object-fit: cover; }
+.clip-todo { display: inline-block; margin-top: 6px; padding: 2px 9px; border-radius: 99px; background: #fff3dc; color: #a35b00; font-size: 12.5px; font-weight: 800; }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.steps span { padding: 4px 12px; border-radius: 99px; background: var(--ground); color: var(--muted); font-size: 13px; font-weight: 700; }
+.steps .done { background: var(--green-soft); color: var(--green-ink); }
+.steps .now { background: #fff3dc; color: #a35b00; }
+.clip-check { width: 100%; border-radius: 10px; border: 1px solid var(--line); }
+@media (max-width: 860px) {
+  .clip-board { grid-template-columns: minmax(0, 1fr); }
+  .clip-list { max-height: none; }
+}
