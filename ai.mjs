@@ -15,7 +15,7 @@ const ENCODING_NOTE = '\n\n(실행 환경: Windows. 파일은 항상 UTF-8로 �
 
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 
-export function runAI(config, engine, prompt, { cwd, log = () => {}, signal } = {}) {
+export function runAI(config, engine, prompt, { cwd, log = () => {}, signal, images = [] } = {}) {
   const template = config.engines?.[engine];
   if (!template) return Promise.reject(new Error(`엔진 설정 없음: ${engine}`));
   const [cmd, ...args] = template.map((part) => part.replaceAll('{cwd}', cwd));
@@ -25,6 +25,9 @@ export function runAI(config, engine, prompt, { cwd, log = () => {}, signal } = 
     const stdinAt = args.lastIndexOf('-');
     args.splice(stdinAt >= 0 ? stdinAt : args.length, 0, '-o', `"${lastFile}"`);
   }
+  // 참고 그림 붙이기(codex -i). -i는 값을 여러 개 받으므로 끝의 '-'(stdin)를 먹지 않게 exec 바로 뒤(다음이 플래그)에 둔다.
+  // claude는 프롬프트 속 파일 경로를 직접 연다
+  if (isCodex && images.length) args.splice(args.indexOf('exec') + 1, 0, ...images.flatMap((f) => ['-i', `"${f}"`]));
   // 생각 깊이(설정 → AI). 비우면 codex 자체 설정(~/.codex/config.toml)을 따른다. 깊을수록 꼼꼼하지만 오래 걸린다
   if (isCodex && EFFORTS.includes(config.codexEffort)) args.unshift('-c', `model_reasoning_effort=${config.codexEffort}`);
   return new Promise((resolve, reject) => {

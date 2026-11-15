@@ -59,6 +59,20 @@ export const TOURS = {
       '코드를 업데이트했거나 화면이 이상하면 `start.cmd`를 다시 실행하세요. 서버를 껐다 켜고 새로 빌드합니다.'
     ] }
   ],
+  autoshorts: [
+    { title: '쇼츠 자동화', body: [
+      '분야를 고르고 **지금 만들기**를 누르면 요즘 뜨는 영상을 찾아 숏폼을 만들어 둡니다. 업로드는 직접 합니다.',
+      '해외 분야는 **② 해외 재밌는 영상**(원작자 채널만), 연예인 분야는 **① 연예인 핫**(인증 채널만) 방식으로 만듭니다. 한 번 쓴 영상은 다시 쓰지 않습니다.',
+      '**YouTube API 키**(선택)를 넣으면 유튜브 공식 인기 차트에서 먼저 찾습니다. 없으면 이번 주 업로드 검색으로 찾습니다.'
+    ] }
+  ],
+  character: [
+    { title: '캐릭터 숏폼', body: [
+      '블로그 캐릭터가 나오는 짧은 영상을 만듭니다. 캐릭터 그림은 영상마다 새로 그리지 않고, **포즈 세트**를 한 번 만들어 계속 씁니다.',
+      '**1. 캐릭터 정하기**: 이름과 기준 그림(블로그 폴더 안 파일)을 저장합니다. 생김새 규칙 글이 있으면 설명 파일로 넣습니다.',
+      '**2. 포즈 세트**: 포즈 16개를 그린 뒤 하나씩 보고 **승인**하거나 **다시 그리기**를 누릅니다. 승인한 포즈만 영상에 나옵니다.'
+    ] }
+  ],
   auto: [
     { title: '글 자동화 (준비 중)', body: [
       '정해진 시간마다 숏텐츠·핫 키워드에서 SEO에 좋은 주제를 골라 글까지 자동으로 만드는 기능입니다. 지금은 준비 중입니다.',
@@ -186,7 +200,7 @@ export const TOURS = {
   ]
 };
 // 화면 → 그 화면 안내
-export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', campaigns: 'campaigns', write: 'write', shorts: 'shorts', shortform: 'shorts', reel: 'shorts', clip: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
+export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', campaigns: 'campaigns', write: 'write', shorts: 'shorts', shortform: 'shorts', reel: 'shorts', clip: 'shorts', character: 'character', autoshorts: 'autoshorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
 
 const GAP = 14, W = 400;
 export function Tour({ steps, onClose, go }) {

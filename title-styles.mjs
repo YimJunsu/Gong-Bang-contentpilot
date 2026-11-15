@@ -32,9 +32,15 @@ export const TITLE_FONTS = {
   jua: { name: '주아', desc: '둥글고 귀여운' }
 };
 
-// ---- 클립형(①②) 위 검은 띠의 두 줄 색 조합 (assets/clip.html) ----
-// t1·t2 = 글자색, t1Box·t2Box = 그 줄 뒤 박스 색(없으면 박스 없음), em = *강조* 글자색
+// ---- 클립형(①②) 위 띠 형식·색 (assets/clip.html) ----
+// layout: band(두 줄 박스) | sticker(스티커 제목 + 말풍선 자막) | slim(얇은 띠 + 이름 칩/별 강조 + 색 선, 출처는 띠 왼쪽 위)
+// t1·t2 = 글자색, t1Box·t2Box = 그 줄 뒤 박스 색(없으면 박스 없음), em = *강조* 글자색, top = 띠 높이, bg = 띠 색, shadow = 스티커 그림자, line = 띠 아래 선
 export const CLIP_STYLES = {
+  chip: { name: '화이트 칩', desc: '연예인 핫 기본 — 흰 띠, 이름은 분홍 칩, 분홍→보라 선', layout: 'slim', top: 330, bg: '#ffffff', tc: '#15172b', emMode: 'pill', emc: '#ffffff', embg: '#ff3d8b', line: 'linear-gradient(90deg,#ff3d8b,#8b5cff)', crc: '#8a8fa3', dot: '#ff3d8b', capMode: 'dark', capem: '#ff8fbf' },
+  night: { name: '라벤더 밤', desc: '보라→남색 띠, 이름은 ✦ 민트, 흰 칩 자막', layout: 'slim', top: 330, bg: 'linear-gradient(120deg,#2a1747,#121a3a)', tc: '#ffffff', emMode: 'star', emc: '#7dffd1', line: '#7dffd1', crc: '#b9b3d6', dot: '#7dffd1', capMode: 'light', capem: '#8b5cff' },
+  peach: { name: '피치 그라데', desc: '분홍→살구 띠, 이름은 흰 칩, 빛 번짐 자막', layout: 'slim', top: 330, bg: 'linear-gradient(90deg,#ff6f9f,#ffb36b)', tc: '#ffffff', emMode: 'pill', emc: '#ff3d7f', embg: '#ffffff', line: '#ffffff', crc: '#fff1f5', dot: '#ffffff', capMode: 'glow', glow: '#ff5c95' },
+  sticker: { name: '연두 스티커', desc: '해외 영상 기본 — 기울어진 형광 연두 스티커 + 말풍선 자막', layout: 'sticker', bg: '#0d0f1a', t1: '#c9d1ff', t2: '#111111', t2Box: '#d7ff3a', shadow: '#ff3d8b', em: '#ff3d8b' },
+  stickerWhite: { name: '흰 스티커', desc: '흰 스티커 + 연두 그림자 + 말풍선 자막', layout: 'sticker', bg: '#111111', t1: '#bdbdbd', t2: '#111111', t2Box: '#ffffff', shadow: '#d7ff3a', em: '#ff3d8b' },
   pink: { name: '분홍 박스', desc: '연예인 핫 기본 — 둘째 줄 분홍 박스', t1: '#ffffff', t2: '#ffffff', t2Box: '#e5007d', em: '#ffe600' },
   capture: { name: '흰 박스 + 형광', desc: '해외 영상 기본 — 첫 줄 흰 박스, 둘째 줄 형광 초록', t1: '#000000', t1Box: '#ffffff', t2: '#3dff2e', em: '#ffe600' },
   yellow: { name: '노랑 박스', desc: '둘째 줄 노란 박스 + 검은 글자', t1: '#ffffff', t2: '#000000', t2Box: '#ffe600', em: '#e5007d' },
@@ -44,9 +50,9 @@ export const CLIP_STYLES = {
 
 // 탭별 기본값(사용자가 바꾸면 그 값). docs/숏폼-통합-설계.md
 export const KIND_DEFAULTS = {
-  celeb: { font: 'gmarket', clipStyle: 'pink' },
-  viral: { font: 'blackhan', clipStyle: 'capture' },
+  celeb: { font: 'gmarket', clipStyle: 'chip' },
+  viral: { font: 'blackhan', clipStyle: 'sticker' },
   topic: { font: 'freesentation', titleStyle: 'auto' },
   material: { font: 'ssurround', titleStyle: 'auto' }
 };
-export const clipStyleOf = (script = {}) => CLIP_STYLES[script.clipStyle] || CLIP_STYLES[(KIND_DEFAULTS[script.kind] || {}).clipStyle] || CLIP_STYLES.pink;
+export const clipStyleOf = (script = {}) => CLIP_STYLES[script.clipStyle] || CLIP_STYLES[(KIND_DEFAULTS[script.kind] || {}).clipStyle] || CLIP_STYLES.chip;

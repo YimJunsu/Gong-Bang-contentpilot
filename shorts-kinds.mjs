@@ -2,7 +2,7 @@
 // job = 그 탭이 만드는 작업 종류, lengths = 짧게/보통/길게의 [최소초, 최대초]
 export const SHORT_KINDS = {
   celeb: { name: '연예인 핫', job: 'clip', lengths: { short: [15, 25], normal: [20, 35], long: [35, 50] } },
-  viral: { name: '해외 재밌는 영상', job: 'clip', lengths: { short: [10, 20], normal: [15, 30], long: [30, 45] } },
+  viral: { name: '해외 재밌는 영상', job: 'clip', lengths: { short: [20, 30], normal: [25, 40], long: [40, 58] } },
   topic: { name: '주제·컨셉', job: 'reel', lengths: { short: [25, 40], normal: [40, 60], long: [60, 90] } },
   material: { name: '내 사진·자료', job: 'shorts', lengths: { short: [20, 35], normal: [30, 50], long: [50, 80] } }
 };

@@ -84,6 +84,9 @@
 | 대시보드 '수집하고 추천받기'(discover) | 핫 키워드 + 숏텐츠 → AI 추천. 수정 후 실사용 미검증 |
 | 네이버 임시저장 | 동작 확인(2026-10-17): 글 생성("다 쓰면 임시저장까지") 4편이 기본 계정으로 에디터 주입·이미지 업로드·저장 클릭까지 성공, 사용자가 네이버에서 확인. 저장 대상은 계정의 블로그 아이디 |
 | 클립 숏폼(만들기 → 클립 숏폼) | `clip.mjs` + `assets/clip.html`, 설계 `docs/클립-숏폼-설계.md`. 인물·화제 → yt-dlp 검색(인증 채널만)·받기 → 2초 간격 장면 모음 그림 → AI 구간·자막 → 원본 소리 그대로 세로 영상 + 점검 그림. 편 목록(할 일/전체)·보고 올리기(올렸어요 표시). 자동 찾기·주소 넣기·소리 끄기·다시 생성 실행 확인(2026-11-13). yt-dlp 필요(`winget install yt-dlp`). 유튜브 업로드는 사람이 |
+| ② 해외 재밌는 영상·클립 형식 | 원작자 채널만(모음·리액션 거르기 `notCompilation`). 형식 `CLIP_STYLES.layout`: sticker(연두/흰 스티커 제목 + 말풍선 자막, ② 기본) · slim(얇은 띠 + 이름 칩, ① 기본 "화이트 칩") · band(예전). 말투: ② 친구 반응("오 지린다;"), ① 팬 커뮤니티 제목. 한 구간 20초 넘으면 잘라 씀. AI 새 말투 대본 + 렌더 확인(2026-11-15). 이 PC는 ffmpeg-static 바이너리가 안 받아져 있었음 → `node node_modules/ffmpeg-static/install.js`. winget yt-dlp는 켜진 서버 PATH에 없어 `clip.mjs ytdlpBin`이 설치 위치를 찾음 |
+| 쇼츠 자동화(자동화 메뉴) | `autoshorts.mjs` + job `autoshorts`: 분야(AUTO_CATS) → YouTube API 키(선택, `config.youtubeKey`) 인기 차트 → 없으면 yt-dlp 이번 주 업로드 검색 → 조회수 순·쓴 영상 제외(`data/autoshorts.json`) → 클립 작업을 차례로(`job.wait`). 자체 검사만, 실제 실행 미검증 |
+| 캐릭터 숏폼(만들기 → 캐릭터 숏폼) | 설계 `docs/캐릭터-숏폼-설계.md`. 1단계 완료: 계정 폴더 `_character`(character.json·poses·raw), 포즈 16종(`character.mjs POSES`) codex 이미지 생성(`runAI images` = `-i` 참고 그림) → 초록 배경 지우기(sharp `keyGreen`) → 화면에서 승인/다시 그리기. 오덕이 16장 생성 확인(2026-11-15). 다음: 무대 `assets/character.html`·대본·목소리(남자) |
 | 자동화 메뉴(글·인스타·스레드 자동화) | "준비 중" 표시만 (`Soon` 컴포넌트). 메뉴마다 하루 첫 진입(이 PC 날짜, 00시 초기화)에 소개 화면 `Splash`: 남색 판에 색 블록 5개가 퍼즐처럼 하나씩 끼워지는 '돌아가면 이런 모습' 미리보기(문구·예시 숫자 `SPLASH`, localStorage `splash-<id>`), 다 끼워지고 1초 뒤 본 화면으로·건너뛰기·ESC. 하루 1회·자동 닫힘(조립 뒤 약 1초)·휴대폰 폭 확인 |
 
 오덕이 블로그 규칙 개정(2026-10-18, 원본은 `D:\BLOG\Oducki\_config\legacy\20261018-이미지·훅-개정전\`): `공통-작성기준.md`에 `실제 이미지(외부 이미지) 쓰기`·`본문 훅`·도입 첫 문장 훅·쓰레드 첫 줄 훅, `HTML-디자인시스템.md` 외부 이미지 캡션 출처 예외, `AGENTS.md` 5단계·검수 목록. 검증기(`tools/validate-post.ps1`)는 `.sources` 영역만 막으므로 캡션 출처 한 줄은 통과(사본으로 확인).

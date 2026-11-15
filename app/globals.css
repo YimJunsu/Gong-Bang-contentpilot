@@ -503,3 +503,18 @@ dialog.modal.retry { width: min(620px, 94vw); }
 }
 .fontsample.clipband { background: #000; -webkit-text-stroke: 0; font-size: 26px; display: grid; gap: 6px; }
 .shorts-tabs { flex-wrap: wrap; }
+
+/* 캐릭터 숏폼 포즈 세트 */
+.charref { display: grid; place-items: center; min-height: 220px; border: 1px dashed var(--line); border-radius: 14px; background: var(--paper); padding: 10px; }
+.charref img { max-width: 100%; max-height: 320px; object-fit: contain; }
+.posegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.posecard { border: 2px solid var(--line); border-radius: 14px; padding: 10px; background: var(--paper); display: grid; gap: 8px; }
+.posecard.on { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.poseimg { aspect-ratio: 1; display: grid; place-items: center; border-radius: 10px; background: repeating-conic-gradient(#eef0f3 0 25%, #fff 0 50%) 0 0 / 20px 20px; overflow: hidden; }
+.poseimg img { max-width: 92%; max-height: 92%; object-fit: contain; }
+.posename { display: flex; align-items: center; gap: 6px; }
+/* 쇼츠 자동화 분야 고르기 */
+.pickchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pickchip { padding: 8px 16px; border: 2px solid var(--line); border-radius: 99px; background: var(--paper); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.pickchip.on { border-color: var(--green); background: var(--green-soft); }
+ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

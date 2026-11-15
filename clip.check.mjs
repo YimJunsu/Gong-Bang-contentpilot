@@ -24,3 +24,17 @@ assert.match(pickPrompt({ topic: '안나' }, [{ id: 'a', channel: 'M2', duration
 const sp = scriptPrompt({ topic: '안나', mute: true }, [{ n: 1, title: 't', channel: 'M2', duration: 60, sheets: ['s.jpg'], hot: [[10, 14]] }]);
 assert.match(sp, /s\.jpg/); assert.match(sp, /10-14/); assert.match(sp, /성적 표현/); assert.match(sp, /소리는 끄고/);
 console.log('clip.check ok');
+
+// ② 해외 재밌는 영상: 모음·리액션 채널 거르기, 원작자 고르기·짧은 구간 지시
+{
+  const { notCompilation, pickPrompt, scriptPrompt } = await import('./clip.mjs');
+  const ok = (title, channel) => notCompilation({ title, channel });
+  if (!ok('Drummer pulls out new sticks for guests', 'Drumeo') || ok('TRY NOT TO LAUGH compilation', 'x') || ok('고양이 웃긴 영상 모음', '냥이') || ok('First time reaction to', 'React Guy')) throw new Error('모음·리액션 거르기');
+  if (!pickPrompt({ topic: 'drum', kind: 'viral' }, []).includes('원작자 채널 영상만')) throw new Error('viral 고르기 지시');
+  const sp = scriptPrompt({ topic: 'x', kind: 'viral', seconds: [10, 20] }, []);
+  if (!sp.includes('구간 1~4개') || !sp.includes('10~20초')) throw new Error('viral 대본 지시');
+  if (!sp.includes('오 지린다;') || !sp.includes('난입함')) throw new Error('viral 말투 지시');
+  const { clipStyleOf } = await import('./title-styles.mjs');
+  if (clipStyleOf({ kind: 'celeb' }).layout !== 'slim' || clipStyleOf({ kind: 'viral' }).layout !== 'sticker') throw new Error('탭별 기본 형식');
+  console.log('clip.check viral ok');
+}

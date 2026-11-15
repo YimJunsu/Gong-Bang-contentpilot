@@ -1,22 +1,57 @@
 <!doctype html>
 <html><head><meta charset="utf-8">
 <!-- 클립 숏폼 글자판. clip.mjs가 장면마다 setup()을 부르고 배경 없이(투명) 찍어 원본 영상 위에 얹는다.
-     위 0~440px = 검은 띠(제목), 아래는 영상. 자막은 영상 아래쪽에 겹친다. -->
+     위 0~top px = 검은 띠(제목), 아래는 영상. 자막은 영상 위에 겹친다.
+     형식(style.layout, title-styles.mjs CLIP_STYLES):
+       band    — 두 줄 박스 제목 + 외곽선 자막 (예전 기본)
+       sticker — 작은 첫 줄 + 기울어진 스티커 둘째 줄(그림자) + 만화 말풍선 자막 (② 해외 재밌는 영상)
+       slim    — 얇은 띠 + 이름 강조(칩/별) + 띠 아래 색 선 + 칩·빛 자막 (① 연예인 핫) -->
 <style>
   html, body { margin:0; width:1080px; height:1920px; overflow:hidden; background:transparent; }
-  #band { position:absolute; left:0; top:0; width:1080px; height:440px; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
-  /* 두 줄 색·박스는 setup()의 style(title-styles.mjs CLIP_STYLES)로 정한다 */
-  #band { --t1:#fff; --t1box:transparent; --t2:#fff; --t2box:#e5007d; --em:#ffe600; }
+  #band { position:absolute; left:0; top:0; width:1080px; height:var(--top); background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
+  body { --top:440px; --bg:#000; --t1:#fff; --t1box:transparent; --t2:#fff; --t2box:#e5007d; --em:#ffe600; --shadow:#ff3d8b; --line:transparent; }
   .t1, .t2 { font-family:T; font-size:92px; line-height:1.1; letter-spacing:-2px; text-align:center; max-width:1000px; padding:6px 26px 12px; border-radius:6px; }
   .t1 { color:var(--t1); background:var(--t1box); }
   .t2 { color:var(--t2); background:var(--t2box); }
   .t1 em, .t2 em { font-style:normal; color:var(--em); }
-  #credit { position:absolute; right:24px; top:464px; padding:6px 16px; border-radius:8px; background:rgba(0,0,0,.55); color:#fff; font:30px B; }
+  #credit { position:absolute; right:24px; top:calc(var(--top) + 24px); padding:6px 16px; border-radius:8px; background:rgba(0,0,0,.55); color:#fff; font:30px B; }
   #cap { position:absolute; left:50px; right:50px; bottom:150px; text-align:center; word-break:keep-all; }
   .c1 { font-family:B; font-size:72px; line-height:1.25; color:#fff; -webkit-text-stroke:14px #000; paint-order:stroke fill; }
   .c2 { margin-top:10px; font-family:B; font-size:50px; line-height:1.25; color:#ffe600; -webkit-text-stroke:11px #000; paint-order:stroke fill; }
   .c1 em, .c2 em { font-style:normal; color:#ffe600; }
   .c2 em { color:#fff; }
+
+  /* sticker */
+  .sticker #band { gap:16px; }
+  .sticker .t1 { font-family:B; font-size:62px; color:var(--t1); background:none; padding:0; letter-spacing:-1px; }
+  .sticker .t2 { font-size:112px; color:var(--t2); background:var(--t2box); padding:4px 34px 14px; border-radius:0; transform:rotate(-2.5deg); box-shadow:10px 10px 0 var(--shadow); letter-spacing:-3px; }
+  .sticker .t2 em { color:var(--em); }
+  .sticker #cap { bottom:170px; left:40px; right:40px; }
+  .sticker .c1 { display:inline-block; position:relative; background:#fff; border:8px solid #111; border-radius:44px; padding:14px 44px 20px; font-family:R; font-size:70px; color:#111; -webkit-text-stroke:0; transform:rotate(1.5deg); }
+  .sticker .c1:after { content:""; position:absolute; left:90px; bottom:-40px; border:20px solid transparent; border-top:28px solid #111; }
+  .sticker .c1 em { color:#ff3d8b; }
+  .sticker .c2 { margin-top:40px; font-family:R; font-size:46px; color:#fff; -webkit-text-stroke:10px #111; }
+  .sticker .c2 em { color:#d7ff3a; }
+
+  /* slim: 얇은 띠(연예인 핫). 색·강조·자막 모양은 style 값(title-styles.mjs)으로 — 강조 em: pill(둥근 칩) | star(✦ + 색) / 자막 cap: dark(어두운 반투명 칩) | light(흰 칩) | glow(빛 번짐 글자) */
+  .slim #band { gap:4px; padding-top:22px; box-sizing:border-box; }
+  .slim #band::after { content:""; position:absolute; left:0; right:0; bottom:0; height:8px; background:var(--line); }
+  .slim .t1, .slim .t2 { font-size:74px; line-height:1.2; color:var(--tc); background:none; padding:0; letter-spacing:-2px; }
+  .slim.em-pill .t1 em, .slim.em-pill .t2 em { color:var(--emc); background:var(--embg); border-radius:999px; padding:0 22px 6px; margin:0 4px; }
+  .slim.em-star .t1 em, .slim.em-star .t2 em { color:var(--emc); }
+  .slim.em-star .t1 em::before, .slim.em-star .t2 em::before { content:"✦"; font-size:.6em; vertical-align:.45em; margin-right:6px; }
+  .slim #credit { top:16px; left:34px; right:auto; padding:0; background:none; font-size:24px; color:var(--crc); letter-spacing:.5px; }
+  .slim #credit::before { content:"● "; color:var(--dot); }
+  .slim #cap { bottom:520px; }
+  .slim .c1, .slim .c2 { -webkit-text-stroke:0; }
+  .slim.cap-dark .c1, .slim.cap-light .c1 { display:inline-block; font-size:58px; padding:10px 34px 14px; border-radius:999px; }
+  .slim.cap-dark .c1 { color:#fff; background:rgba(16,18,32,.72); }
+  .slim.cap-light .c1 { color:#1b1d2e; background:rgba(255,255,255,.92); }
+  .slim.cap-dark .c1 em, .slim.cap-light .c1 em { color:var(--capem); }
+  .slim.cap-dark .c2, .slim.cap-light .c2 { margin-top:12px; font-size:38px; color:#fff; text-shadow:0 0 12px rgba(0,0,0,.85), 0 2px 4px rgba(0,0,0,.9); }
+  .slim.cap-glow .c1 { font-size:64px; color:#fff; text-shadow:0 0 22px var(--glow), 0 0 6px var(--glow), 0 3px 6px rgba(0,0,0,.6); }
+  .slim.cap-glow .c1 em { color:#fff3b0; }
+  .slim.cap-glow .c2 { margin-top:6px; font-size:40px; color:#fff; text-shadow:0 0 14px var(--glow), 0 2px 5px rgba(0,0,0,.7); }
 </style></head>
 <body>
   <div id="band"></div>
@@ -32,8 +67,9 @@ window.setup = async ({ fonts, style = {}, title, caption, sub, credit }) => {
     for (const [family, url] of Object.entries(fonts)) { const f = new FontFace(family, `url("${url}")`); await f.load(); document.fonts.add(f); }
     loaded = true;
   }
-  const band = $('#band');
-  for (const [k, v] of [['--t1', style.t1], ['--t1box', style.t1Box || 'transparent'], ['--t2', style.t2], ['--t2box', style.t2Box || 'transparent'], ['--em', style.em]]) if (v) band.style.setProperty(k, v);
+  document.body.className = [style.layout || 'band', style.emMode && `em-${style.emMode}`, style.capMode && `cap-${style.capMode}`].filter(Boolean).join(' ');
+  const vars = [['--top', style.top ? `${style.top}px` : ''], ['--bg', style.bg], ['--t1', style.t1], ['--t1box', style.t1Box || 'transparent'], ['--t2', style.t2], ['--t2box', style.t2Box || 'transparent'], ['--em', style.em], ['--shadow', style.shadow], ['--line', style.line], ['--tc', style.tc], ['--emc', style.emc], ['--embg', style.embg], ['--crc', style.crc], ['--dot', style.dot], ['--capem', style.capem], ['--glow', style.glow]];
+  for (const [k, v] of vars) if (v) document.body.style.setProperty(k, v);
   const [a = '', b = ''] = title;
   $('#band').innerHTML = `${a ? `<div class="t1">${marked(a)}</div>` : ''}${b ? `<div class="t2">${marked(b)}</div>` : ''}`;
   $('#credit').style.display = credit ? '' : 'none';

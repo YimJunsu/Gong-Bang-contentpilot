@@ -23,11 +23,11 @@ const Emoji = ({ name, size = 22 }) => <img className="emoji" src={`/emoji/${nam
 const MENU = [
   { group: null, items: [['home', '대시보드', 'chart']] },
   { group: '찾기', items: [['reward', '핫 키워드', 'fire'], ['shortents', '숏텐츠', 'news'], ['campaigns', '체험단 정보 조회', 'news']] },
-  { group: '만들기', items: [['write', '글 생성하기', 'memo'], ['shortform', '숏폼', 'clapper']] },
-  { group: '자동화', items: [['visits', '댓글 답방', 'check'], ['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
+  { group: '만들기', items: [['write', '글 생성하기', 'memo'], ['shortform', '숏폼', 'clapper'], ['character', '캐릭터 숏폼', 'sparkles']] },
+  { group: '자동화', items: [['autoshorts', '쇼츠 자동화', 'rocket'], ['visits', '댓글 답방', 'check'], ['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
   { group: '관리', items: [['posts', '글 목록', 'books'], ['jobs', '작업 로그', 'clipboard'], ['settings', '설정', 'gear']] }
 ];
-const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비' };
+const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비', poses: '캐릭터 포즈', autoshorts: '쇼츠 자동화' };
 const STATUS = { running: ['hourglass', '진행 중'], done: ['check', '완료'], failed: ['cross', '실패'] };
 
 // 오래 걸리는 일(새로고침·로그인 창·세션 확인)은 다른 화면에 다녀와도 '진행 중'이 남아야 한다.
@@ -282,6 +282,8 @@ export default function Page() {
     insta: <Soon id="insta" title="인스타 자동화" desc="만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
     threads: <Soon id="threads" title="스레드 자동화" desc="만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
     write: <Write draft={draft} setDraft={setDraft} engine={state?.config?.engine} startJob={startJob} categories={state?.categories || []} hasRules={state?.hasRules} naver={naverOf(state?.config)} rootOk={state?.rootOk} root={state?.root} go={go} />,
+    autoshorts: <AutoShorts jobs={jobs} startJob={startJob} go={go} config={state?.config} reload={loadState} />,
+    character: <Character jobs={jobs} startJob={startJob} go={go} />,
     shortform: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} />,
     // 예전 메뉴 주소(알림·저장된 탭)는 숏폼의 해당 탭으로
     shorts: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="material" />,
@@ -797,22 +799,23 @@ function LengthPick({ kind, value, onChange }) {
 
 // ① 연예인 핫(② 해외 재밌는 영상도 같은 틀): 인물·화제 → 유튜브 원본 구간 → 훅 제목·자막 얹은 세로 영상
 function ClipForm({ startJob, kind = 'celeb' }) {
+  const viral = kind === 'viral';
   const [form, setForm] = useState({ topic: '', notes: '', links: '', mute: false });
   const [length, setLength] = useSticky(`shorts-length-${kind}`, 'normal');
   const [look, setLook] = useSticky(`shorts-look-${kind}`, KIND_DEFAULTS[kind]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
   const submit = async () => {
     const urls = linksOf(form.links);
-    if (!form.topic.trim()) throw new Error('인물이나 화제를 입력해 주세요');
+    if (!form.topic.trim()) throw new Error(viral ? '분야나 키워드를 입력해 주세요' : '인물이나 화제를 입력해 주세요');
     if (urls.length > 3) throw new Error('영상 주소는 3개까지 넣을 수 있습니다');
     await startJob({ type: 'clip', kind, length, titleFont: look.font, clipStyle: look.clipStyle, topic: form.topic.trim(), notes: form.notes.trim(), urls, mute: form.mute }, { stay: true });
     setForm((f) => ({ ...f, topic: '', notes: '', links: '' }));
   };
   return (
     <section className="panel">
-      <label className="field"><span>인물·화제 (필수)</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder="예: 미야오 안나 직캠, 지수 대기실" /></label>
-      <label className="field"><span>메모 (선택)</span><textarea value={form.notes} onChange={set('notes')} placeholder="예: 표정 위주로, 'GO HARD' 무대만, 제목은 반전형으로" /></label>
-      <label className="field"><span>원본 영상 주소 (선택, 3개까지)</span><textarea value={form.links} onChange={set('links')} placeholder="https://youtu.be/...  비워 두면 인증(공식) 채널에서 찾습니다" /><small>남의 영상을 쓰므로 저작권 신고를 받을 수 있습니다. 공식 채널 영상을 짧게, 출처를 붙여 씁니다.</small></label>
+      <label className="field"><span>{viral ? '분야·키워드 (필수)' : '인물·화제 (필수)'}</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder={viral ? '예: drummer funny moment, dog surprised, 콘서트 레전드' : '예: 미야오 안나 직캠, 지수 대기실'} />{viral && <small>영어로 넣으면 해외 원본이 더 잘 나옵니다. 모음·재업로드·리액션 채널은 빼고 원작자 채널 영상만 고릅니다.</small>}</label>
+      <label className="field"><span>메모 (선택)</span><textarea value={form.notes} onChange={set('notes')} placeholder={viral ? '예: 마지막 반응 장면 위주로, 제목은 공감형으로' : "예: 표정 위주로, 'GO HARD' 무대만, 제목은 반전형으로"} /></label>
+      <label className="field"><span>원본 영상 주소 (선택, 3개까지)</span><textarea value={form.links} onChange={set('links')} placeholder={viral ? 'https://youtu.be/...  비워 두면 원작자 채널에서 찾습니다' : 'https://youtu.be/...  비워 두면 인증(공식) 채널에서 찾습니다'} /><small>남의 영상을 쓰므로 저작권 신고를 받을 수 있습니다. 공식 채널 영상을 짧게, 출처를 붙여 씁니다.</small></label>
       <LookPick kind={kind} value={look} onChange={setLook} />
       <LengthPick kind={kind} value={length} onChange={setLength} />
       <label className="row" style={{ marginBottom: 6 }}><input type="checkbox" checked={form.mute} onChange={set('mute')} /><span>원본 소리 끄기 <span className="muted">— 음악은 업로드할 때 유튜브에서 고릅니다(저작권 신고가 줄어듭니다)</span></span></label>
@@ -905,7 +908,7 @@ function ShortsHub({ config, reload, startJob, jobs, initialTab }) {
         {Object.entries(SHORT_KINDS).map(([id, k], i) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{`${'①②③④'[i]} ${k.name}`}</button>)}
       </div>
       {tab === 'celeb' && <ClipForm startJob={startJob} kind="celeb" />}
-      {tab === 'viral' && <section className="panel"><Empty title="다음 단계에서 만듭니다">원작자 채널의 해외 재밌는 영상에 한국어 훅 제목·자막을 붙이는 탭입니다(설계 완료, 구현 중).</Empty></section>}
+      {tab === 'viral' && <ClipForm startJob={startJob} kind="viral" />}
       {tab === 'topic' && config && <Reel config={config} reload={reload} startJob={startJob} />}
       {tab === 'material' && config && <Shorts config={config} reload={reload} startJob={startJob} />}
       <ShortBoard startJob={startJob} jobs={jobs} kind={tab} />
@@ -921,6 +924,22 @@ const fontFaces = Object.keys(TITLE_FONTS).map((id) => `@font-face{font-family:"
 function ClipBandSample({ style, font }) {
   const box = (bg) => (bg ? { background: bg, padding: '1px 8px 3px', borderRadius: 4 } : {});
   const em = { fontStyle: 'normal', color: style.em };
+  if (style.layout === 'slim') {
+    const name = style.emMode === 'pill' ? { color: style.emc, background: style.embg, borderRadius: 999, padding: '0 7px 2px' } : { color: style.emc };
+    return (
+      <div className="fontsample clipband" style={{ fontFamily: `"pv-${font}"`, background: style.bg, borderBottom: '3px solid transparent', borderImage: `${style.line} 1`, gap: 2 }}>
+        <div style={{ font: '10px sans-serif', color: style.crc }}>● 출처 채널</div>
+        <div style={{ color: style.tc }}>이 얼굴로 별명이</div>
+        <div style={{ color: style.tc }}>왕발가락인 <em style={{ fontStyle: 'normal', ...name }}>{style.emMode === 'star' ? '✦' : ''}리브</em>..</div>
+      </div>
+    );
+  }
+  if (style.layout === 'sticker') return (
+    <div className="fontsample clipband" style={{ fontFamily: `"pv-${font}"`, background: style.bg, gap: 8 }}>
+      <div style={{ color: style.t1, fontSize: 15, fontFamily: 'inherit' }}>드럼 배틀 끝난 줄 알았는데</div>
+      <div><span style={{ color: style.t2, background: style.t2Box, padding: '1px 10px 3px', display: 'inline-block', transform: 'rotate(-2.5deg)', boxShadow: `4px 4px 0 ${style.shadow}` }}>밴드 난입함</span></div>
+    </div>
+  );
   return (
     <div className="fontsample clipband" style={{ fontFamily: `"pv-${font}"` }}>
       <div><span style={{ color: style.t1, ...box(style.t1Box) }}>내향인이라면</span></div>
@@ -1582,6 +1601,146 @@ function Visits() {
           </table>
         </section>
       )}
+    </>
+  );
+}
+
+// 쇼츠 자동화: 분야 고르고 '지금 만들기' → 요즘 뜨는 영상을 찾아 클립 숏폼으로. 업로드는 사람이(숏폼 메뉴의 목록에서 보고 올린다)
+function AutoShorts({ jobs, startJob, go, config, reload }) {
+  const dialog = useDialog();
+  const [info, load] = useApiData('/api/autoshorts');
+  const [cats, setCats] = useSticky('auto-cats', ['comedy', 'talkshow']);
+  const [per, setPer] = useSticky('auto-per', 1);
+  const [length, setLength] = useSticky('auto-length', 'normal');
+  const [key, setKey] = useState(null);
+  useEffect(() => { load(); }, [load]);
+  const running = jobs.find((j) => j.type === 'autoshorts' && j.status === 'running');
+  const recent = jobs.filter((j) => j.type === 'autoshorts').slice(0, 5);
+  const toggle = (id) => setCats((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const run = async () => {
+    if (!cats.length) throw new Error('분야를 하나 이상 골라 주세요');
+    await startJob({ type: 'autoshorts', cats, per, length }, { stay: true });
+  };
+  const saveKey = async () => { await post('/api/config', { youtubeKey: (key ?? '').trim() }); setKey(null); await reload(); await load(); await dialog.alert(key?.trim() ? 'YouTube API 키를 저장했습니다' : 'YouTube API 키를 지웠습니다. 검색으로 찾습니다', '쇼츠 자동화'); };
+  const groups = [['viral', '② 해외 재밌는 영상'], ['celeb', '① 연예인 핫']];
+  return (
+    <>
+      <Head title="쇼츠 자동화" desc="분야를 고르고 '지금 만들기'를 누르면 요즘 뜨는 영상을 찾아 숏폼을 만들어 둡니다. 다 만들면 숏폼 메뉴 목록에서 보고 직접 올리면 됩니다" />
+      <section className="panel">
+        {groups.map(([kind, label]) => (
+          <div className="field" key={kind}><span>{label}</span>
+            <div className="pickchips">
+              {Object.entries(info?.cats || {}).filter(([, c]) => c.kind === kind).map(([id, c]) => (
+                <button key={id} type="button" className={`pickchip${cats.includes(id) ? ' on' : ''}`} aria-pressed={cats.includes(id)} onClick={() => toggle(id)}>{c.name}</button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="grid2">
+          <label className="field"><span>분야마다 몇 편</span>
+            <select value={per} onChange={(e) => setPer(Number(e.target.value))}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}편</option>)}</select>
+          </label>
+          <label className="field"><span>길이</span>
+            <select value={length} onChange={(e) => setLength(e.target.value)}><option value="short">짧게</option><option value="normal">보통</option><option value="long">길게</option></select>
+          </label>
+        </div>
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+          <Action primary big loading busy={Boolean(running)} run={run}>지금 만들기</Action>
+          <span className="muted">{running ? `만드는 중 — 완성 ${running.result?.made?.length || 0}편` : `골라 둔 분야 ${cats.length}개 · 예상 ${cats.length * per}편 (한 편에 몇 분씩, 차례로 만듭니다)`}</span>
+        </div>
+      </section>
+      <section className="panel">
+        <h2 className="panel-title">최근 실행</h2>
+        {recent.length ? (
+          <ul className="plain">
+            {recent.map((j) => (
+              <li key={j.id}><Status status={j.status} /> {new Date(j.startedAt).toLocaleString('ko-KR')} · 완성 {j.result?.made?.length || 0}편{j.result?.failed?.length ? ` · 못 만듦 ${j.result.failed.length}` : ''}{j.error ? ` · ${j.error}` : ''}</li>
+            ))}
+          </ul>
+        ) : <p className="muted">아직 없습니다.</p>}
+        <div className="row" style={{ gap: 8, marginTop: 10 }}>
+          <button className="btn" onClick={() => go('shortform')}>만든 숏폼 보러 가기</button>
+          <button className="btn" onClick={() => go('jobs')}>작업 로그</button>
+        </div>
+      </section>
+      <section className="panel">
+        <h2 className="panel-title">찾는 곳</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          {info?.hasKey ? 'YouTube API 키가 있어 유튜브 공식 인기 차트에서 먼저 찾고, 모자라면 이번 주 업로드 검색으로 채웁니다.' : 'API 키 없이 이번 주 업로드 검색(조회수 순)으로 찾습니다. 키를 넣으면 유튜브 공식 인기 차트도 씁니다(선택).'}
+          {' '}해외 영상은 모음·재업로드·리액션 채널을 빼고, 연예인은 인증 채널만 씁니다. 한 번 쓴 영상은 다시 쓰지 않습니다{info ? ` (지금까지 ${info.used}개)` : ''}.
+        </p>
+        <label className="field"><span>YouTube API 키 (선택)</span>
+          <input type="password" value={key ?? (config?.youtubeKey ? '••••••••' : '')} onFocus={() => key === null && setKey('')} onChange={(e) => setKey(e.target.value)} placeholder="Google Cloud에서 받은 YouTube Data API v3 키" />
+          <small>이 PC의 config.json에만 저장됩니다. 비우고 저장하면 지웁니다</small>
+        </label>
+        <Action run={saveKey}>키 저장</Action>
+      </section>
+    </>
+  );
+}
+
+// 캐릭터 숏폼(docs/캐릭터-숏폼-설계.md). 1단계: 캐릭터 정하기 + 포즈 세트 만들기·검수. 영상 만들기는 포즈 승인 뒤 다음 단계에서 붙인다
+function Character({ jobs, startJob, go }) {
+  const dialog = useDialog();
+  const [data, load] = useApiData('/api/character');
+  const [form, setForm] = useState(null);
+  const running = jobs.find((j) => j.type === 'poses' && j.status === 'running');
+  useEffect(() => { load(); }, [load, running?.id, running?.result?.made?.length]);
+  useEffect(() => { if (data && !form) setForm({ name: data.name || '', ref: data.ref || '', notes: data.notes || '' }); }, [data, form]);
+  if (!data) return <Head title="캐릭터 숏폼" desc="불러오는 중" />;
+  if (!data.root) return (<><Head title="캐릭터 숏폼" /><p className="note">작업 폴더가 없습니다. <a href="#" onClick={(e) => { e.preventDefault(); go('settings'); }}>설정</a>에서 블로그 작업 폴더를 정해 주세요.</p></>);
+  const img = (file, at) => `/api/image?path=${encodeURIComponent(file)}&t=${at || 0}`;
+  const poseFile = (id) => `${data.dir}\\poses\\${id}.png`;
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const save = async () => { await post('/api/character', form); await load(); await dialog.alert('저장했습니다', '캐릭터'); };
+  const approve = async (id, on) => { await post('/api/character', { approve: { id, on } }); await load(); };
+  const make = async (ids) => { await startJob({ type: 'poses', ids }, { stay: true }); await load(); };
+  const made = Object.keys(data.poses || {});
+  const approved = made.filter((id) => data.poses[id].approved);
+  const missing = data.poseList.map(([id]) => id).filter((id) => !made.includes(id));
+  const ready = data.name && data.ref;
+  return (
+    <>
+      <Head title="캐릭터 숏폼" desc="블로그 캐릭터가 나오는 짧은 영상('○○ 특' 같은 형식)을 만듭니다. 먼저 캐릭터 포즈 그림을 한 번 만들어 두고, 영상마다 그 그림을 다시 씁니다" />
+      <section className="panel">
+        <h2 className="panel-title">1. 캐릭터 정하기</h2>
+        <div className="grid2">
+          <div>
+            <label className="field"><span>이름</span><input value={form?.name || ''} onChange={set('name')} placeholder="예: 오덕이" /></label>
+            <label className="field"><span>기준 그림</span><input value={form?.ref || ''} onChange={set('ref')} placeholder="블로그 폴더 안 경로, 예: model\basic_oducki.png" /><small>캐릭터 생김새의 정답 그림. 포즈를 그릴 때 참고 그림으로 넣습니다</small></label>
+            <label className="field"><span>설명 파일 (선택)</span><input value={form?.notes || ''} onChange={set('notes')} placeholder="예: model\지식파일-오덕이-캐릭터.md" /><small>생김새 규칙을 적은 글. 있으면 그대로 지키게 합니다</small></label>
+            <Action primary run={save}>저장</Action>
+          </div>
+          <div className="charref">{data.ref ? <img src={img(`${data.root}\\${data.ref}`)} alt="기준 그림" /> : <span className="muted">기준 그림을 저장하면 여기 보입니다</span>}</div>
+        </div>
+      </section>
+      <section className="panel">
+        <h2 className="panel-title">2. 포즈 세트 <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>승인 {approved.length} / {data.poseList.length}</span></h2>
+        <p className="muted" style={{ marginTop: 0 }}>그림을 보고 괜찮으면 <b>승인</b>, 이상하면 <b>다시 그리기</b>. 승인한 포즈만 영상에 나옵니다. 4장에 몇 분씩 걸립니다.</p>
+        <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+          {missing.length > 0 && <Action primary loading busy={Boolean(running)} run={() => (ready ? make(missing) : Promise.reject(new Error('캐릭터 이름과 기준 그림을 먼저 저장해 주세요')))}>{made.length ? `없는 포즈 ${missing.length}개 그리기` : `포즈 ${data.poseList.length}개 그리기`}</Action>}
+          {running && <span className="muted">그리는 중 — 완성된 것부터 아래에 나타납니다 ({running.result?.made?.length || 0}장 완성)</span>}
+        </div>
+        <div className="posegrid">
+          {data.poseList.map(([id, name]) => {
+            const p = data.poses[id];
+            return (
+              <div key={id} className={`posecard${p?.approved ? ' on' : ''}`}>
+                <div className="poseimg">{p ? <img src={img(poseFile(id), p.at)} alt={name} /> : <span className="muted">아직 없음</span>}</div>
+                <div className="posename"><b>{name}</b>{p?.approved && <span className="muted">· 승인됨</span>}</div>
+                {p && <div className="row" style={{ gap: 6 }}>
+                  <Action run={() => approve(id, !p.approved)}>{p.approved ? '승인 취소' : '승인'}</Action>
+                  <Action busy={Boolean(running)} run={() => make([id])}>다시 그리기</Action>
+                </div>}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="panel">
+        <h2 className="panel-title">3. 영상 만들기</h2>
+        <p className="muted">포즈를 승인한 뒤 열립니다(다음 단계에서 붙입니다).</p>
+      </section>
     </>
   );
 }
