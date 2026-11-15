@@ -14,6 +14,7 @@ import ffmpegPath from 'ffmpeg-static';
 import { chromium } from 'playwright-core';
 import { ffmpeg, duration, FONT_CHOICES } from './video.mjs';
 import { clipStyleOf, KIND_DEFAULTS } from './title-styles.mjs';
+import { UPLOAD_RULE } from './shorts-kinds.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS = path.join(HERE, 'assets', 'fonts');
@@ -77,6 +78,38 @@ export async function download(config, url, outBase, log) {
   return `${outBase}.mp4`;
 }
 
+// 영어 대사(자막 파일만 받는다, 영상 아님): 올린 사람 자막 → 없으면 유튜브 자동 자막. [{start,end,text}] (원본 초)
+// 한글 번역 자막을 만들 때 AI에게 넘긴다. 없으면 빈 배열(말 없는 영상이거나 자막이 꺼진 영상)
+export async function transcript(config, url, outBase, log = () => {}) {
+  const dir = path.dirname(outBase), base = path.basename(outBase);
+  await ytdlp(config, [url, '--no-playlist', '--skip-download', '--write-subs', '--write-auto-subs', '--sub-langs', 'en,en-US,en-GB,en-orig', '--sub-format', 'json3', '-o', `${outBase}.%(ext)s`], log).catch((e) => log(`영어 자막 없음: ${e.message}`));
+  const files = (await fs.readdir(dir).catch(() => [])).filter((n) => n.startsWith(`${base}.`) && n.endsWith('.json3'));
+  const pick = files.find((n) => /\.en(-US|-GB)?\.json3$/.test(n)) || files[0];
+  return pick ? parseJson3(await fs.readFile(path.join(dir, pick), 'utf8')) : [];
+}
+// json3: events[{tStartMs, dDurationMs, segs[{utf8}]}]. 자동 자막은 줄이 겹쳐 나오므로 같은 글은 합치고 줄바꿈만 있는 것은 뺀다
+export function parseJson3(text) {
+  let data;
+  try { data = JSON.parse(String(text).replace(/^﻿/, '')); } catch { return []; }
+  const out = [];
+  for (const e of data.events || []) {
+    const t = (e.segs || []).map((s) => s.utf8 || '').join('').replace(/\s+/g, ' ').trim();
+    if (!t || /^\[[^\]]*\]$/.test(t)) continue; // [Music]·[Applause] 같은 표시는 뺀다
+    const start = (e.tStartMs || 0) / 1000, end = start + (e.dDurationMs || 1500) / 1000;
+    const last = out[out.length - 1];
+    if (last && last.text === t) { last.end = Math.max(last.end, end); continue; }
+    if (last && last.end > start) last.end = start; // 겹치면 앞 줄을 다음 줄 시작에서 끊는다
+    out.push({ start: Math.round(start * 10) / 10, end: Math.round(end * 10) / 10, text: t });
+  }
+  return out.filter((c) => c.end > c.start);
+}
+// 프롬프트용: "[12.3-14.8] text" 줄, 너무 길면 앞에서부터 자른다
+export const transcriptText = (cues, max = 16000) => {
+  let s = '';
+  for (const c of cues) { const line = `[${c.start}-${c.end}] ${c.text}\n`; if (s.length + line.length > max) break; s += line; }
+  return s.trim();
+};
+
 // 장면 모음 그림: 2초마다 한 칸, 칸 왼쪽 위에 '12s'처럼 원본 시각. 5×6칸(1분)씩 여러 장
 export async function contactSheets(file, outPrefix, every = 2) {
   file = path.resolve(file); outPrefix = path.resolve(outPrefix); // ffmpeg는 글꼴을 찾으려고 글꼴 폴더에서 돈다
@@ -122,6 +155,7 @@ export function pickPrompt({ topic, notes = '', kind = 'celeb' }, found) {
 }
 export function scriptPrompt({ topic, notes = '', mute = false, seconds = [15, 40], kind = 'celeb' }, sources) {
   const viral = kind === 'viral';
+  const hasTalk = sources.some((s) => s.transcript?.length);
   return [
     '세로(9:16) 유튜브 쇼츠를 만든다. 아래 원본 영상에서 구간을 골라 이어 붙이고, 위에 훅 제목·아래에 자막을 얹는다. 결과는 이 폴더의 script.json 하나다.',
     viral ? `분야·키워드: ${topic} (해외 재밌는 영상 — 한국 시청자에게 소개한다)` : `인물·화제: ${topic}`,
@@ -131,7 +165,8 @@ export function scriptPrompt({ topic, notes = '', mute = false, seconds = [15, 4
     ...sources.map((s) => [
       `[${s.n}] ${s.title} | ${s.channel} | ${s.duration}초`,
       ...s.sheets.map((f) => `  그림: ${f}`),
-      s.hot?.length ? `  많이 다시 본 구간(초): ${s.hot.map(([a, b]) => `${a}-${b}`).join(', ')}` : ''
+      s.hot?.length ? `  많이 다시 본 구간(초): ${s.hot.map(([a, b]) => `${a}-${b}`).join(', ')}` : '',
+      s.transcript?.length ? `  영어 대사([원본 시작초-끝초] 문장, 자동 자막이라 틀릴 수 있다):\n${transcriptText(s.transcript).replace(/^/gm, '    ')}` : ''
     ].filter(Boolean).join('\n')),
     '',
     'script.json 형식:',
@@ -143,11 +178,19 @@ export function scriptPrompt({ topic, notes = '', mute = false, seconds = [15, 4
       ? '- 제목 두 줄은 영상 내내 위에 고정되는 훅. 첫째 줄(작게)은 기대를 까는 상황("드럼 배틀 끝난 줄 알았는데", "내향인이라면 제일 피하고 싶은"), 둘째 줄(크게, 스티커)은 커뮤니티 말투로 터뜨린다: ~함/~임/~됨/~각/~ㄷㄷ 끝맺음, 12자 안팎("밴드 통째로 난입함", "보험사 기절각", "이건 반칙이지"). 결과를 다 말하지 말고 "뭔데?" 궁금하게. 설명문·존댓말·"~하는 순간" 같은 밋밋한 말 금지. "*별표*"는 한 곳만 강조.'
       : '- 첫 구간이 가장 강한 장면(훅). 제목 두 줄은 영상 내내 위에 고정되는 훅, 팬 커뮤니티 제목 말투: 첫째 줄은 궁금증·배경("이 얼굴로 별명이", "3년 만에 디즈니에서 다시 부른", "긴 생머리 vs 중단발 뭐가 답?"), 둘째 줄은 반전·결론 + 인물 이름("수원왕발가락인 *리브*..", "결론은 뭐든 됨 *카리나*"). 인물 이름(그룹·멤버)은 *별표*로 감싸고(노란 밑줄), 끝은 ".." 또는 "?"로 여운. 각 줄 18자 이내.',
     '- focus: 세로로 자를 때 중심 [가로%, 세로%]. 원본에서 인물 얼굴·몸 중심 위치. 기본 [50,40].',
+    viral ? '- 한국 시청자는 영어를 못 알아듣는다고 본다. 제목 첫 줄은 무슨 상황인지(누가·어디서·뭘 하는지) 알려 주고, 말을 알아야만 웃긴 장면이면 반드시 번역 자막(subs)을 단다.' : '',
+    viral && hasTalk
+      ? '- 장면에 영어 대사가 있으면 "subs"에 한글 번역 자막을 대사 타이밍 그대로 단다: [{"at":원본 시작초,"end":원본 끝초,"text":"번역"}]. 위 영어 대사 시각을 따르고 구간(start~end) 안만. 직역 말고 자연스러운 한국어 구어(존댓말·반말은 말하는 사람 분위기대로), 한 자막 22자 이내(길면 두 줄은 | 로 나눔), 자막 사이 빈틈 없이 말하는 동안 계속. 고유명사는 그대로 또는 한글 표기. 번역은 대사에 있는 뜻만(지어내지 않음). 이 자막은 흰 글씨로 깔끔하게 나온다.'
+      : viral ? '- 대사가 거의 없는 영상이면 "subs"는 빈 배열.' : '',
     viral
-      ? '- caption은 옆에서 같이 보는 친구의 반응(말풍선): 반말, 짧게(12자 안팎), 감탄·드립 위주. 예: "오 지린다;", "아니 표정 봐ㅋㅋㅋ", "이게 생방이라고?", "ㄹㅇ 미쳤네", "형님 여기서 왜 웃음", "잠깐만 다시 봐". ㅋㅋ·;·?! 허용. 외국어 대사는 이 말투로 핵심만 옮긴다("이거 말고 없냐고ㅋㅋ"). 장면 해설("무대가 다시 분주해져요")·존댓말·뉴스 말투 금지. *별표* 1곳은 분홍 강조. sub는 대부분 빈 문자열, 꼭 필요할 때만 짧은 상황 보충. 욕설·외모 비하·성적 표현 금지. 원본이 누구 것인지 지어내지 않는다.'
+      ? '- 반응 말풍선은 "pops"로 터지는 순간에만: [{"at":원본초,"text":"오 지린다;"}] 장면마다 0~2개, 영상 전체 2~4개, 한 번 1.8초 정도 뜬다. 웃음·반전·놀라는 바로 그 순간 시각으로. caption은 빈 문자열로 둔다.'
+      : '',
+    viral
+      ? '- pops 글은 옆에서 같이 보는 친구의 반응(말풍선): 반말, 짧게(12자 안팎), 감탄·드립 위주. 예: "오 지린다;", "아니 표정 봐ㅋㅋㅋ", "이게 생방이라고?", "ㄹㅇ 미쳤네", "형님 여기서 왜 웃음", "잠깐만 다시 봐". ㅋㅋ·;·?! 허용. 외국어 대사는 이 말투로 핵심만 옮긴다("이거 말고 없냐고ㅋㅋ"). 장면 해설("무대가 다시 분주해져요")·존댓말·뉴스 말투 금지. *별표* 1곳은 분홍 강조. sub는 대부분 빈 문자열, 꼭 필요할 때만 짧은 상황 보충. 욕설·외모 비하·성적 표현 금지. 원본이 누구 것인지 지어내지 않는다.'
       : '- caption은 팬 댓글 같은 한 줄("이 직캠 댓글 1위", "크리스마스 공주들 그 자체", "워너원 때 춤선부터"), sub는 그 아래 작은 보충(그 댓글 내용·포인트, 선택). 반말·팬 말투, 짧게. 외모 품평·성적 표현 금지.',
     mute ? '- 원본 소리는 끄고 업로드 때 음악을 고른다. sound에 어울리는 음악 분위기를 쓴다.' : '- 원본 소리를 그대로 쓴다. sound에는 원본 소리를 끌 때 쓸 음악 분위기를 쓴다.',
     RULES,
+    UPLOAD_RULE,
     '- 질문하지 말고 끝까지 진행한다. 이 폴더 밖 파일을 수정하지 않는다. 마지막에 script.json 내용을 그대로 출력한다.'
   ].filter((l) => l !== '').join('\n');
 }
@@ -176,7 +219,16 @@ export function validateClip(script, sources) {
     total += end - start;
     const f = Array.isArray(s.focus) ? s.focus.map(num) : [50, 40];
     const focus = [0, 1].map((k) => (Number.isFinite(f[k]) ? Math.min(100, Math.max(0, f[k])) : [50, 40][k]));
-    return { src: src.n, start, end, focus, caption: String(s.caption || '').trim(), sub: String(s.sub || '').trim() };
+    // 번역 자막(subs)·반응 말풍선(pops): 원본 시각 → 구간 안으로 자르고, 장면 안 시각(0초부터)으로 바꿔 둔다
+    const inside = (t) => Math.min(end, Math.max(start, num(t)));
+    const subs = (Array.isArray(s.subs) ? s.subs : []).map((x) => ({ a: inside(x?.at), b: inside(x?.end), text: String(x?.text || '').trim() }))
+      .filter((x) => x.text && x.b - x.a >= 0.3).sort((x, y) => x.a - y.a)
+      .map((x) => ({ at: +(x.a - start).toFixed(2), end: +(x.b - start).toFixed(2), text: x.text.slice(0, 50) }));
+    subs.forEach((x, k) => { if (subs[k + 1] && x.end > subs[k + 1].at) x.end = subs[k + 1].at; });
+    const pops = (Array.isArray(s.pops) ? s.pops : []).map((x) => ({ a: inside(x?.at), text: String(x?.text || '').trim() }))
+      .filter((x) => x.text && x.a < end - 0.3).slice(0, 3)
+      .map((x) => ({ at: +(x.a - start).toFixed(2), end: +Math.min(end - start, x.a - start + 1.8).toFixed(2), text: x.text.slice(0, 24) }));
+    return { src: src.n, start, end, focus, caption: pops.length ? '' : String(s.caption || '').trim(), sub: String(s.sub || '').trim(), subs, pops };
   });
   if (total > 60) throw new Error(`전체 길이가 너무 깁니다(${total.toFixed(0)}초, 60초까지)`);
   return { ...script, layout: 'clip', title: script.title.slice(0, 2).map(String), scenes: clean, hashtags: Array.isArray(script.hashtags) ? script.hashtags : [] };
@@ -215,17 +267,28 @@ export async function renderClip(dir, script, { chromePath, log = () => {} } = {
       const png = path.join(work, `text-${i + 1}.png`);
       await page.evaluate((d) => window.setup(d), { fonts, style, title: script.title || [], caption: s.caption, sub: s.sub, credit: src.channel ? `출처: ${src.channel}` : '' });
       await page.screenshot({ path: png, omitBackground: true });
+      // 시간에 따라 켜지는 글자판: 번역 자막(흰 글씨) + 터지는 순간 반응 말풍선
+      const timed = [];
+      for (const [k, x] of [...(s.subs || []).map((x) => ({ ...x, layer: 'sub' })), ...(s.pops || []).map((x) => ({ ...x, layer: 'pop' }))].entries()) {
+        const f = path.join(work, `text-${i + 1}-${x.layer}-${k + 1}.png`);
+        await page.evaluate((d) => window.setup(d), { fonts, style, layer: x.layer, text: x.text });
+        await page.screenshot({ path: f, omitBackground: true });
+        timed.push({ file: f, at: x.at, end: x.end });
+      }
       const len = (s.end - s.start).toFixed(2);
       const audio = script.mute
         ? ['-f', 'lavfi', '-t', len, '-i', 'anullsrc=r=44100:cl=stereo']
         : [];
       const fade = Math.max(0, s.end - s.start - 0.15).toFixed(2);
       const out = path.join(work, `scene-${String(i + 1).padStart(2, '0')}.mp4`);
-      await ffmpeg(['-ss', String(s.start), '-to', String(s.end), '-i', file, '-i', png, ...audio,
+      const ai = 2 + timed.length; // 무음 입력 번호(글자판 뒤)
+      await ffmpeg(['-ss', String(s.start), '-to', String(s.end), '-i', file, '-i', png, ...timed.flatMap((x) => ['-i', x.file]), ...audio,
         '-filter_complex', [
           `[0:v]${cropFilter(s.focus || [50, 40], H - top)},fps=${FPS},pad=${W}:${H}:0:${top}:black[v]`,
-          '[v][1:v]overlay=0:0,format=yuv420p[vo]',
-          script.mute ? '[2:a]anull[ao]' : `[0:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,afade=t=in:d=0.08,afade=t=out:st=${fade}:d=0.15[ao]`
+          '[v][1:v]overlay=0:0[l0]',
+          ...timed.map((x, k) => `[l${k}][${k + 2}:v]overlay=0:0:enable='between(t,${x.at},${x.end})'[l${k + 1}]`),
+          `[l${timed.length}]format=yuv420p[vo]`,
+          script.mute ? `[${ai}:a]anull[ao]` : `[0:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,afade=t=in:d=0.08,afade=t=out:st=${fade}:d=0.15[ao]`
         ].join(';'),
         '-map', '[vo]', '-map', '[ao]', '-t', len, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-r', String(FPS),
         '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2', out], log);

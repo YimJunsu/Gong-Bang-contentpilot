@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { UPLOAD_RULE } from './shorts-kinds.mjs';
 
 export const POSES = [
   ['idle', '기본', 'standing calmly, neutral relaxed face'],
@@ -92,3 +93,68 @@ export async function keyGreen(src, dst) {
 
 // 승인된 포즈만(영상에 쓰는 것)
 export const approvedPoses = (ch) => Object.entries(ch.poses).filter(([, p]) => p.approved).map(([id]) => id);
+
+// ---- 영상 만들기(2·3단계) ----
+export const CHAR_FORMATS = {
+  tuk: { name: '○○ 특', desc: '"○○하는 사람 특징"을 하나씩 나열하다 마지막에 반전', example: '아이폰 쓰는 사람 특' },
+  rule: { name: '○○할 때 국룰', desc: '다들 하는 행동을 공감 가게 나열', example: '월급날 국룰' },
+  vs: { name: '비교', desc: '두 부류를 번갈아 비교(○○ vs ○○)', example: '계획형 vs 즉흥형 여행' },
+  free: { name: '자유', desc: '주제에 맞게 자유롭게', example: '' }
+};
+export const CHAR_LENGTHS = { short: [20, 30], normal: [30, 40], long: [40, 55] };
+export const MOVES = ['idle', 'bounce', 'shake', 'pop', 'zoom', 'jump', 'slide', 'tilt', 'nod'];
+export const FX = ['sweat', 'sparkle', 'anger', 'question', 'heart', 'shock'];
+
+export function charScriptPrompt({ topic, format = 'tuk', notes = '', length = 'normal', name }, poses) {
+  const f = CHAR_FORMATS[format] || CHAR_FORMATS.free;
+  const [a, b] = CHAR_LENGTHS[length] || CHAR_LENGTHS.normal;
+  const poseList = POSES.filter(([id]) => poses.includes(id)).map(([id, ko]) => `${id}(${ko})`).join(', ');
+  return [
+    `유튜브 쇼츠용 캐릭터 영상 대본을 쓴다. 캐릭터 '${name}'가 화면 아래에 크게 서서 표정·자세를 바꾸고, 남자 목소리 내레이션이 깔린다. 결과는 이 폴더의 script.json 하나다.`,
+    `주제: ${topic}`, `형식: ${f.name} — ${f.desc}`, notes ? `요청(따른다): ${notes}` : '',
+    '',
+    '말투(가장 중요): 커뮤니티 썰 푸는 능청스러운 반말 내레이션. 문장 끝은 ~함/~거림/~임/~됨/~하는 편 같은 짧은 관찰체("맥날 카훗코 아이키아 거림", "할인 문자 오면 일단 장바구니부터 담음"). 구체적인 행동·대사·브랜드 같은 디테일로 웃긴다. 설명문·존댓말·교훈 금지. 마지막 줄은 반전이나 뼈 때리는 한 방.',
+    '첫 줄은 3초 안에 멈추게 하는 훅: 주제를 그대로 외치거나("아이폰 쓰는 사람 특"), 공감 질문으로 시작.',
+    '',
+    'script.json 형식:',
+    '{"title":["업로드 제목(20자 이내)"],"scenes":[{"bg_prompt":"배경 그림 설명(영어)","lines":[{"text":"읽을 문장","tone":"normal","pose":"smug","move":"bounce","fx":["sparkle"],"pop":["팡 글자1","팡 글자2"]}]}],"description":"업로드 설명 2~3줄","hashtags":["#태그"]}',
+    `- 장면 1~3개, 줄은 모두 합쳐 ${Math.round(a / 3.5)}~${Math.round(b / 3.5)}개, 읽는 시간 합쳐서 ${a}~${b}초를 넘기지 않는다(한 줄 2~4초, 16자 안팎).`,
+    `- pose는 이 중에서만: ${poseList}. 말하는 평범한 줄은 talk나 idle, 감정이 실린 줄은 맞는 표정. 같은 포즈를 3줄 넘게 연달아 쓰지 않는다.`,
+    `- move: ${MOVES.join('·')} 중 하나(줄 시작 때 몸 동작). fx: ${FX.join('·')} 중 0~2개(머리 근처 효과).`,
+    '- pop: 화면 위쪽에 손글씨처럼 크게 "팡" 하고 뜨는 글자 0~3개, 하나에 2~6자, 그 줄의 핵심 단어·감탄("맥날!", "카훗코!", "ㄹㅇ?", "0원"). 모든 줄에 넣지 말고 절반 정도에만. *별표* 1곳은 색 강조.',
+    '- tone: normal·emphasis·excited·whisper·angry 중 하나(대부분 normal).',
+    '- bg_prompt: 세로 9:16 배경. 주제에 맞는 장소(카페·지하철·방·회사 등), 밝고 부드러운 3D 렌더 느낌, 뒤는 살짝 흐리게, 화면 아래 절반은 캐릭터가 설 수 있게 비워 둔다. 사람·캐릭터·글자·로고 없음.',
+    '- 실존 인물 비하·혐오·성적 표현 금지. 브랜드는 가볍게 언급만.',
+    UPLOAD_RULE,
+    '- 질문하지 말고 끝까지 진행한다. 이 폴더 밖 파일을 수정하지 않는다. 마지막에 script.json 내용을 그대로 출력한다.'
+  ].filter((l) => l !== '').join('\n');
+}
+
+// AI 대본 검사·정리: 승인된 포즈만, 모르는 움직임·효과는 빼고, 팡 글자는 짧게
+export function validateCharScript(script, poses) {
+  const scenes = Array.isArray(script?.scenes) ? script.scenes.slice(0, 3) : [];
+  const clean = scenes.map((s, i) => {
+    const lines = (Array.isArray(s?.lines) ? s.lines : []).map((l) => ({
+      text: String(l?.text || '').trim(),
+      tone: ['normal', 'emphasis', 'excited', 'whisper', 'angry'].includes(l?.tone) ? l.tone : 'normal',
+      pose: poses.includes(l?.pose) ? l.pose : (poses.includes('talk') ? 'talk' : poses[0]),
+      move: MOVES.includes(l?.move) ? l.move : 'idle',
+      fx: (Array.isArray(l?.fx) ? l.fx : []).filter((x) => FX.includes(x)).slice(0, 2),
+      pop: (Array.isArray(l?.pop) ? l.pop : []).map((p) => String(p || '').trim()).filter(Boolean).slice(0, 3).map((p) => p.slice(0, 10))
+    })).filter((l) => l.text);
+    if (!lines.length) throw new Error(`장면 ${i + 1}에 문장이 없습니다`);
+    return { bg_prompt: String(s.bg_prompt || '').trim() || 'soft blurred cozy room background, warm light, no people, no text', lines, media: `media/bg-${String(i + 1).padStart(2, '0')}.png` };
+  });
+  if (!clean.length) throw new Error('script.json에 장면이 없습니다');
+  return { ...script, kind: 'character', title: [String(script.title?.[0] || '').trim()].filter(Boolean), scenes: clean, hashtags: Array.isArray(script.hashtags) ? script.hashtags : [] };
+}
+
+// 자막 줄바꿈: 길면 두 줄로, 가운데에 가장 가까운 띄어쓰기에서 '|' (두 줄 길이를 비슷하게)
+export function wrapCaption(text, max = 15) {
+  const t = String(text).trim();
+  if (t.length <= max) return t;
+  const mid = t.length / 2;
+  let best = -1;
+  for (let i = 0; i < t.length; i += 1) if (t[i] === ' ' && (best < 0 || Math.abs(i - mid) < Math.abs(best - mid))) best = i;
+  return best < 0 ? t : `${t.slice(0, best)}|${t.slice(best + 1)}`;
+}

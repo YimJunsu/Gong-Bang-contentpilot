@@ -11,7 +11,7 @@ import { renderShort, FONT_CHOICES } from './video.mjs';
 import { TITLE_STYLES, CLIP_STYLES } from './title-styles.mjs';
 // 사용자가 고른 글꼴·스타일만 남긴다(모르는 값은 버리고 탭 기본값을 쓴다)
 const fontPick = (input) => (FONT_CHOICES[input.titleFont] ? { titleFont: input.titleFont } : {});
-import { lengthRange } from './shorts-kinds.mjs';
+import { lengthRange, SHORT_FOLDERS, UPLOAD_RULE, UPLOAD_TXT, uploadText, uploadTitle } from './shorts-kinds.mjs';
 import { fetchShortents, updateStore, similarPost } from './shortents.mjs';
 import { notify } from './notify.mjs';
 import * as visits from './visits.mjs';
@@ -21,9 +21,10 @@ const nvVisits = () => import(`${pathToFileURL(path.join(path.dirname(fileURLToP
 const onPage = async (profile, name, ...args) => { const mod = await nvVisits(); return naver.usePage(config, profile, (page) => mod[name](page, ...args)); };
 import { reelPrompt, validateReel, validateImages, assignMedia, normalizeTopics } from './reel.mjs';
 import { createCampaignService } from './campaigns.mjs';
-import { searchVideos, searchUrl, videoInfo, download, contactSheets, pickPrompt, pickIds, scriptPrompt, validateClip, notCompilation, withCredits, renderClip, youtubeUrl } from './clip.mjs';
+import { searchVideos, searchUrl, videoInfo, download, contactSheets, pickPrompt, pickIds, scriptPrompt, validateClip, notCompilation, withCredits, renderClip, youtubeUrl, transcript } from './clip.mjs';
 import { networkSettings } from './network.mjs';
 import * as character from './character.mjs';
+import { renderCharacter } from './character-render.mjs';
 import { AUTO_CATS, trendingApi, pickFresh, weekSearchUrl } from './autoshorts.mjs';
 import { createReadStream } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -125,7 +126,7 @@ function startJob(type, input, work) {
 }
 
 // 끝난 작업을 Windows 알림으로 알린다 (설정에서 끌 수 있다). 누르면 작업 로그가 열린다
-const JOB_NAMES = { autoshorts: '쇼츠 자동화', write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비' };
+const JOB_NAMES = { character: '캐릭터 숏폼', autoshorts: '쇼츠 자동화', write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비' };
 function announce(job) {
   if (config.notify === false || !JOB_NAMES[job.type]) return;
   const what = job.input.topic || path.basename(job.input.postDir || job.input.dir || '') || '';
@@ -271,9 +272,26 @@ function writePrompt({ root, topic, category, notes, thumbNotes, files = [], ref
 
 // ---- 숏폼 ----
 const SHORTS = () => path.join(curRoot(), 'shorts');
-const safeName = (v) => String(v).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '').slice(0, 40) || 'short';
 const inShorts = (dir) => { const rel = path.relative(SHORTS(), path.resolve(dir)); return rel && !rel.startsWith('..') && !path.isAbsolute(rel); };
 const ttsOptions = () => ({ ...(config.tts || {}), chromePath: config.chromePath });
+// 숏폼 폴더: shorts\<분류>\<날짜>-<제목>. 처음엔 주제로 만들고, 대본이 나오면 업로드 제목으로 이름을 바꾼다
+const folderTitle = (v) => String(v || '').replace(/[\\/:*?"<>|#%*\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 50).replace(/[. ]+$/, '') || '숏폼';
+const freeDir = (base) => { let dir = base; for (let n = 2; existsSync(dir); n += 1) dir = `${base}-${n}`; return dir; };
+const newShortDir = (kind, title) => freeDir(path.join(SHORTS(), SHORT_FOLDERS[kind] || '기타', `${today().replace(/-/g, '')}-${folderTitle(title)}`));
+const writeUploadTxt = (dir, script) => fs.writeFile(path.join(dir, UPLOAD_TXT), uploadText(script));
+// 대본이 정해진 뒤: 업로드 txt를 쓰고, 새로 만든 폴더면 업로드 제목으로 이름을 바꾼다(실패하면 원래 이름 그대로)
+async function settleShortDir(job, dir, script, log) {
+  let out = dir;
+  if (!job.input.dir) {
+    const want = path.join(path.dirname(dir), `${path.basename(dir).slice(0, 9)}${folderTitle(uploadTitle(script))}`);
+    if (want !== dir && !existsSync(want)) {
+      try { await fs.rename(dir, want); out = want; log(`폴더 이름: ${path.basename(want)}`); } catch (e) { log(`폴더 이름 바꾸기 건너뜀(${e.code || e.message})`); }
+    }
+  }
+  job.result = { ...(job.result || {}), dir: out }; saveJobs();
+  await writeUploadTxt(out, script);
+  return out;
+}
 
 function shortsPrompt({ topic, notes, files, titleStyle, length }) {
   const [minSec, maxSec] = lengthRange('material', length);
@@ -299,6 +317,7 @@ function shortsPrompt({ topic, notes, files, titleStyle, length }) {
     '- title 두 줄은 영상 내내 위에 고정된다. 가장 중요한 숫자나 이득을 *별표*로 강조.',
     TITLE_STYLES[titleStyle] ? '' : `- "titleStyle": 주제·분위기에 맞는 제목 스타일 하나를 고른다: ${Object.entries(TITLE_STYLES).map(([id, s]) => `${id}(${s.name} — ${s.desc})`).join(', ')}.`,
     '- 자료에 없는 숫자·날짜·조건을 지어내지 마라.',
+    UPLOAD_RULE,
     '- media는 media/ 안 파일만. PDF는 핵심 페이지를 PNG로 media/에 저장해 쓴다. 영상 파일은 그대로 써도 된다.',
     '- 맞는 자료가 없는 장면은 이미지 생성이 가능하면 9:16 또는 1:1 이미지를 media/에 만들어 쓰고, 불가능하면 null.',
     '- 질문하지 말고 끝까지 진행한다. 마지막에 script.json 내용을 그대로 출력한다.'
@@ -307,7 +326,7 @@ function shortsPrompt({ topic, notes, files, titleStyle, length }) {
 
 const jobTypes = {
   async reel(job, log) {
-    const dir = path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(job.input.topic)}-${job.id.slice(-4)}`);
+    let dir = newShortDir('topic', job.input.topic);
     await fs.mkdir(path.join(dir, 'media'), { recursive: true });
     job.result = { dir }; saveJobs();
     const files = [];
@@ -326,6 +345,7 @@ const jobTypes = {
     if (files.length) assignMedia(script.scenes, files);
     else script.scenes.forEach((scene, i) => { scene.media = `media/scene-${String(i + 1).padStart(2, '0')}.png`; });
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    dir = await settleShortDir(job, dir, script, log);
     if (!files.length) {
     log(`Codex 이미지 생성 · ${script.scenes.length}장`);
     const imagePrompt = [
@@ -344,7 +364,7 @@ const jobTypes = {
   async shorts(job, log) {
     // 다시 생성이면 원래 폴더에서(대본·영상은 새로 만든다), 처음이면 새 폴더
     const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
-    const dir = again ? job.input.dir : path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(job.input.topic || '숏폼')}-${job.id.slice(-4)}`);
+    let dir = again ? job.input.dir : newShortDir('material', job.input.topic || '내 자료');
     if (again) await fs.rm(path.join(dir, 'script.json'), { force: true });
     const media = path.join(dir, 'media');
     await fs.mkdir(media, { recursive: true });
@@ -362,16 +382,18 @@ const jobTypes = {
     else if (!TITLE_STYLES[script.titleStyle]) delete script.titleStyle;
     if (job.input.font && !script.titleStyle) script.font = job.input.font;
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    dir = await settleShortDir(job, dir, script, log);
     log(`대본 장면 ${script.scenes.length}개 → 렌더링`);
     return { dir, video: await renderShort(dir, script, { tts: ttsOptions(), log }) };
   },
   async render(job, log) {
     if (!inShorts(job.input.dir)) throw new Error('숏폼 폴더가 아닙니다');
     const script = parseJson(await fs.readFile(path.join(job.input.dir, 'script.json'), 'utf8'));
+    await writeUploadTxt(job.input.dir, script);
     if (script.layout === 'clip') return { dir: job.input.dir, video: await renderClip(job.input.dir, script, { chromePath: config.chromePath, log }) };
+    if (script.kind === 'character') { const root = needRoot(); const ch = await character.readCharacter(root); return { dir: job.input.dir, video: await renderCharacter(job.input.dir, { ...script, ...character.validateCharScript(script, character.approvedPoses(ch)) }, { root, tts: ttsOptions(), voice: ch.voice, log }) }; }
     return { dir: job.input.dir, video: await renderShort(job.input.dir, script, { tts: ttsOptions(), log }) };
   },
-  // 클립 숏폼(docs/클립-숏폼-설계.md): 원본 찾기 → 받기 → 장면 모음 그림 → AI 구간·자막 → 렌더
   // 쇼츠 자동화: 고른 분야마다 요즘 뜨는 영상을 찾아 클립 숏폼을 한 편씩 차례로 만든다(한꺼번에 돌리면 AI·다운로드가 몰린다)
   async autoshorts(job, log) {
     needRoot();
@@ -410,6 +432,40 @@ const jobTypes = {
     if (!job.result.made.length) throw new Error('한 편도 만들지 못했습니다. 작업 로그를 확인하세요');
     return job.result;
   },
+  // 캐릭터 숏폼 한 편: 대본(승인된 포즈만) → 배경 그림(codex 이미지) → 남자 목소리 + 무대 캡처
+  async character(job, log) {
+    const root = needRoot();
+    const ch = await character.readCharacter(root);
+    const poses = character.approvedPoses(ch);
+    if (!poses.includes('idle') || poses.length < 4) throw new Error('캐릭터 포즈를 4개 이상(기본 포함) 승인해 주세요');
+    const topic = String(job.input.topic || '').trim();
+    if (!topic) throw new Error('주제를 입력해 주세요');
+    const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
+    let dir = again ? job.input.dir : newShortDir('character', topic);
+    await fs.mkdir(path.join(dir, 'media'), { recursive: true });
+    job.result = { dir }; saveJobs();
+    log('codex로 대본 쓰는 중');
+    await fs.rm(path.join(dir, 'script.json'), { force: true });
+    const output = await runAI(config, 'codex', character.charScriptPrompt({ ...job.input, topic, name: ch.name }, poses), { cwd: dir, log });
+    const raw = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null')) || lastJson(output);
+    const script = { ...character.validateCharScript(raw, poses), topic, format: job.input.format || 'tuk', ...fontPick(job.input) };
+    await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    dir = await settleShortDir(job, dir, script, log);
+    log(`대본: ${script.scenes.reduce((n, s) => n + s.lines.length, 0)}줄 · 배경 그림 ${script.scenes.length}장 생성 중`);
+    await runAI(config, 'codex', [
+      '내장 image_gen.imagegen 도구로 아래 배경 그림을 각각 한 장씩 만든다. 세로 9:16(1024x1536 정도), 같은 영상의 배경이라 그림체를 맞춘다.',
+      '사람·캐릭터·동물·글자·로고·워터마크 없음. 화면 아래 절반은 캐릭터가 서도록 바닥·벽처럼 단순하게.',
+      '생성된 실제 이미지 파일을 지정한 경로에 PNG로 복사한다. 코드로 그린 그림·빈 파일 금지. 도구를 쓸 수 없으면 실패를 보고하고 멈춘다. 작업 폴더 밖 파일·script.json은 건드리지 않는다.',
+      ...script.scenes.map((s) => `${s.media}: ${s.bg_prompt}`)
+    ].join('\n'), { cwd: dir, log });
+    for (const s of script.scenes) {
+      const head = await fs.readFile(path.join(dir, s.media)).then((b) => b.subarray(0, 8)).catch(() => null);
+      if (!head || !head.equals(Buffer.from('89504e470d0a1a0a', 'hex'))) throw new Error(`배경 그림을 만들지 못했습니다: ${s.media}`);
+    }
+    log('목소리·무대 렌더링 중');
+    const video = await renderCharacter(dir, script, { root, tts: ttsOptions(), voice: ch.voice, log });
+    return { dir, video };
+  },
   // 캐릭터 포즈 세트 만들기(docs/캐릭터-숏폼-설계.md). 4장씩 나눠 codex 이미지 생성 → 초록 배경 지우기 → poses. 새로 만든 포즈는 다시 검수(승인 해제)
   async poses(job, log) {
     const root = needRoot();
@@ -444,11 +500,12 @@ const jobTypes = {
     if (failed.length) log(`못 만든 포즈: ${failed.join(', ')} — 캐릭터 화면에서 다시 만들기`);
     return job.result;
   },
+  // 클립 숏폼(docs/클립-숏폼-설계.md): 원본 찾기 → 받기 → 장면 모음 그림 → AI 구간·자막 → 렌더
   async clip(job, log) {
     const { topic, urls = [] } = job.input;
     // 다시 생성이면 원래 폴더에서(받아 둔 원본은 yt-dlp가 다시 받지 않는다)
     const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
-    const dir = again ? job.input.dir : path.join(SHORTS(), `${today().replace(/-/g, '')}-${safeName(topic)}-${job.id.slice(-4)}`);
+    let dir = again ? job.input.dir : newShortDir(job.input.kind === 'viral' ? 'viral' : 'celeb', topic);
     await fs.mkdir(path.join(dir, 'src'), { recursive: true });
     job.result = { dir }; saveJobs();
     const engine = job.input.engine || config.engine;
@@ -476,7 +533,10 @@ const jobTypes = {
       // 파일 이름은 영상 id로: 다시 생성 때 같은 영상이면 받지 않고, 다른 영상이 남은 파일을 대신 쓰지 않게
       const file = await download(config, info.url, path.join(dir, 'src', info.id), log);
       const sheets = await contactSheets(file, path.join(dir, 'src', `sheet-${info.id}`));
-      sources.push({ n, url: info.url, title: info.title, channel: info.channel, duration: info.duration, hot: info.hot, sheets, file: path.relative(dir, file) });
+      // ② 해외 영상: 영어 대사(자막 파일)를 받아 한글 번역 자막을 달게 한다
+      const talk = job.input.kind === 'viral' ? await transcript(config, info.url, path.join(dir, 'src', `sub-${info.id}`), log).catch(() => []) : [];
+      if (talk.length) log(`원본 ${n} 영어 대사 ${talk.length}줄 → 한글 자막으로`);
+      sources.push({ n, url: info.url, title: info.title, channel: info.channel, duration: info.duration, hot: info.hot, sheets, transcript: talk, file: path.relative(dir, file) });
     }
     log(`${engine}로 구간·자막 고르는 중`);
     await fs.rm(path.join(dir, 'script.json'), { force: true });
@@ -487,6 +547,7 @@ const jobTypes = {
     const script = { ...validateClip(raw, kept), kind, ...fontPick(job.input), ...(CLIP_STYLES[job.input.clipStyle] ? { clipStyle: job.input.clipStyle } : {}), sources: kept, mute: Boolean(job.input.mute) };
     script.description = withCredits(script.description, kept);
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    dir = await settleShortDir(job, dir, script, log);
     log(`구간 ${script.scenes.length}개 → 렌더링`);
     return { dir, video: await renderClip(dir, script, { chromePath: config.chromePath, log }) };
   },
@@ -954,8 +1015,9 @@ const routes = {
   'GET /api/autoshorts': async () => ({ cats: AUTO_CATS, hasKey: Boolean(config.youtubeKey), used: Object.keys(readJson('autoshorts.json', { used: {} }).used).length }),
   'GET /api/character': async () => {
     const root = curRoot();
-    if (!rootOk(root)) return { root: '', poseList: character.POSES };
-    return { root, dir: character.charDir(root), poseList: character.POSES, ...(await character.readCharacter(root)) };
+    const base = { poseList: character.POSES, formats: character.CHAR_FORMATS };
+    if (!rootOk(root)) return { root: '', ...base };
+    return { root, dir: character.charDir(root), ...base, ...(await character.readCharacter(root)) };
   },
   'POST /api/character': async (req) => character.saveCharacter(needRoot(), await jsonBody(req)),
   'GET /api/font': async (req, res, url) => {
@@ -985,8 +1047,17 @@ const routes = {
   },
   'GET /api/shorts': async () => {
     const out = [];
+    const dirs = [];
     for (const name of await fs.readdir(SHORTS()).catch(() => [])) {
-      const dir = path.join(SHORTS(), name);
+      const d = path.join(SHORTS(), name);
+      if (!(await fs.stat(d).catch(() => null))?.isDirectory()) continue;
+      // 예전 폴더(shorts 바로 아래)는 그대로, 분류 폴더면 그 안의 편들
+      if (['script.json', 'short.mp4', 'media', 'src'].some((f) => existsSync(path.join(d, f)))) dirs.push(d);
+      else for (const sub of await fs.readdir(d).catch(() => [])) dirs.push(path.join(d, sub));
+    }
+    for (const dir of dirs) {
+      const name = path.basename(dir);
+      if (!(await fs.stat(dir).catch(() => null))?.isDirectory()) continue;
       const script = await fs.readFile(path.join(dir, 'script.json'), 'utf8').then(parseJson).catch(() => null);
       const video = await fs.stat(path.join(dir, 'short.mp4')).catch(() => null);
       out.push({ dir, name, script, video: video ? video.mtime : null });
@@ -998,6 +1069,7 @@ const routes = {
     if (!inShorts(dir)) throw new Error('숏폼 폴더가 아닙니다');
     if (!Array.isArray(script?.scenes)) throw new Error('scenes 배열이 필요합니다');
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
+    await writeUploadTxt(dir, script);
     return { ok: true };
   },
   // 미리보기용 mp4 스트리밍 (Range 지원 — 브라우저 video 태그가 탐색할 수 있게). shorts 폴더 밖은 거절.
@@ -1052,7 +1124,8 @@ const routes = {
       if (!Array.isArray(input.urls || []) || (input.urls || []).length > 3 || (input.urls || []).some((u) => !youtubeUrl(u))) throw new Error('영상 주소는 유튜브 주소로 3개까지 넣어 주세요');
     }
     if (type === 'write') needRoot(rootOf(naverAccountOrNone(input.account)));
-    if (['shorts', 'reel', 'render', 'discover', 'clip', 'poses', 'autoshorts'].includes(type)) needRoot();
+    if (['shorts', 'reel', 'render', 'discover', 'clip', 'poses', 'autoshorts', 'character'].includes(type)) needRoot();
+    if (type === 'character' && !String(input.topic || '').trim()) throw new Error('주제를 입력해 주세요');
     if (type === 'autoshorts' && jobs.some((j) => j.type === 'autoshorts' && j.status === 'running')) throw new Error('쇼츠 자동화가 이미 돌고 있습니다');
     if (type === 'poses' && jobs.some((j) => j.type === 'poses' && j.status === 'running')) throw new Error('포즈를 이미 만드는 중입니다');
     if (type === 'visit' && jobs.some((j) => j.type === 'visit' && j.status === 'running')) throw new Error('답방 준비가 이미 진행 중입니다');

@@ -92,7 +92,7 @@ export async function duration(file) {
 }
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 // TTS에 넘길 글: *강조* 별표와 [태그] 제거
-const spoken = (text) => String(text).replace(/\*/g, '').replace(/\[[^\]]*\]\s*/g, '').trim();
+export const spoken = (text) => String(text).replace(/\*/g, '').replace(/\[[^\]]*\]\s*/g, '').trim();
 
 // ---- TTS ----
 // 반환: { file, words: [{part,start,end}] (ms) | null }. 타이밍이 없으면 자막을 글자 수 비례로 나눈다.
@@ -208,7 +208,7 @@ export function markEmphasis(caption, sourceText) {
 }
 
 // ---- 효과음 (한 번 합성해서 data/sfx에 둔다) ----
-async function sfx() {
+export async function sfx() {
   await fs.mkdir(SFX, { recursive: true });
   const whoosh = path.join(SFX, 'whoosh.wav');
   const pop = path.join(SFX, 'pop.wav');
@@ -225,7 +225,7 @@ async function sfx() {
 }
 
 // ---- 장면 음성: 문장마다 감정을 달리해 만들고 이어 붙인다 ----
-async function buildVoice(scene, index, work, cacheDir, tts, log) {
+export async function buildVoice(scene, index, work, cacheDir, tts, log) {
   const parts = [];
   let offset = 0;
   const words = [];
@@ -318,10 +318,11 @@ function sceneData(scene, v, i, ctx) {
   };
 }
 
-async function renderScene(browser, data, voice, sounds, out, log) {
+// stage: 무대 HTML 주소(캐릭터 숏폼은 assets/character.html)
+export async function renderScene(browser, data, voice, sounds, out, log, stage = STAGE) {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   try {
-    await page.goto(STAGE);
+    await page.goto(stage);
     await page.evaluate((d) => window.setup(d), data);
     const cdp = await page.context().newCDPSession(page);
     const T = data.seconds.toFixed(3);

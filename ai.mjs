@@ -18,7 +18,8 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 export function runAI(config, engine, prompt, { cwd, log = () => {}, signal, images = [] } = {}) {
   const template = config.engines?.[engine];
   if (!template) return Promise.reject(new Error(`엔진 설정 없음: ${engine}`));
-  const [cmd, ...args] = template.map((part) => part.replaceAll('{cwd}', cwd));
+  // shell:true라 경로를 따옴표로 감싼다(숏폼 폴더 이름에 띄어쓰기가 있다 — 2026-11-15 'unexpected argument' 실패)
+  const [cmd, ...args] = template.map((part) => (part === '{cwd}' ? `"${cwd}"` : part.replaceAll('{cwd}', cwd)));
   const lastFile = path.join(os.tmpdir(), `bh-last-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.txt`);
   const isCodex = /(^|[\\/])codex(\.cmd|\.exe)?$/i.test(cmd);
   if (isCodex && !args.includes('-o') && !args.includes('--output-last-message')) {

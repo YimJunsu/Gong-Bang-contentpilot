@@ -4,7 +4,7 @@ import { validateClip, pickIds, withCredits, cropFilter, youtubeUrl, pickPrompt,
 const sources = [{ n: 1, url: 'https://www.youtube.com/watch?v=a', channel: 'M2', duration: 60 }];
 const ok = validateClip({ title: ['윗줄', '*아랫줄*'], scenes: [{ src: 1, start: '3.04', end: 7, focus: [150, 'x'], caption: ' 자막 ' }] }, sources);
 assert.equal(ok.layout, 'clip');
-assert.deepEqual(ok.scenes[0], { src: 1, start: 3, end: 7, focus: [100, 40], caption: '자막', sub: '' });
+assert.deepEqual(ok.scenes[0], { src: 1, start: 3, end: 7, focus: [100, 40], caption: '자막', sub: '', subs: [], pops: [] });
 assert.throws(() => validateClip({ title: ['a'], scenes: [{ src: 2, start: 0, end: 3 }] }, sources), /원본 번호/);
 assert.throws(() => validateClip({ title: ['a'], scenes: [{ src: 1, start: 50, end: 70 }] }, sources), /원본 길이/);
 assert.throws(() => validateClip({ title: ['a'], scenes: [{ src: 1, start: 5, end: 5.2 }] }, sources), /시각/);
@@ -37,4 +37,18 @@ console.log('clip.check ok');
   const { clipStyleOf } = await import('./title-styles.mjs');
   if (clipStyleOf({ kind: 'celeb' }).layout !== 'slim' || clipStyleOf({ kind: 'viral' }).layout !== 'sticker') throw new Error('탭별 기본 형식');
   console.log('clip.check viral ok');
+}
+
+// 번역 자막·반응 말풍선: 구간 안으로 자르고 장면 시각(0초부터)으로, 겹치면 앞 자막을 끊는다. pops가 있으면 통자막(caption)은 뺀다
+{
+  const { validateClip: vc, parseJson3, transcriptText } = await import('./clip.mjs');
+  const src = [{ n: 1, duration: 60, channel: 'c', url: 'u', title: 't', file: 'f' }];
+  const s = vc({ title: ['a', 'b'], scenes: [{ src: 1, start: 10, end: 20, caption: '통자막', subs: [{ at: 9, end: 12, text: '안녕|하세요' }, { at: 11.5, end: 25, text: '둘째' }, { at: 15, end: 15.1, text: '짧음' }], pops: [{ at: 14, text: '오 지린다;' }, { at: 19.9, text: '끝 직전' }] }] }, src).scenes[0];
+  assert.deepEqual(s.subs, [{ at: 0, end: 1.5, text: '안녕|하세요' }, { at: 1.5, end: 10, text: '둘째' }]);
+  assert.deepEqual(s.pops, [{ at: 4, end: 5.8, text: '오 지린다;' }]);
+  assert.equal(s.caption, '');
+  const cues = parseJson3(JSON.stringify({ events: [{ tStartMs: 1000, dDurationMs: 3000, segs: [{ utf8: 'hello ' }, { utf8: 'there' }] }, { tStartMs: 2000, dDurationMs: 1000, segs: [{ utf8: '\n' }] }, { tStartMs: 3000, dDurationMs: 2000, segs: [{ utf8: '[Music]' }] }, { tStartMs: 3500, dDurationMs: 2000, segs: [{ utf8: 'next one' }] }] }));
+  assert.deepEqual(cues, [{ start: 1, end: 3.5, text: 'hello there' }, { start: 3.5, end: 5.5, text: 'next one' }]);
+  assert.equal(transcriptText(cues), '[1-3.5] hello there\n[3.5-5.5] next one');
+  assert.deepEqual(parseJson3('not json'), []);
 }

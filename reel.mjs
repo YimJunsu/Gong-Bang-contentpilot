@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { UPLOAD_RULE } from './shorts-kinds.mjs';
 
 export function reelPrompt({ topic, narration = '', style = 'info', files = [], seconds = [45, 65] }) {
   if (!String(topic || '').trim()) throw new Error('주제를 입력해 주세요');
@@ -13,6 +14,7 @@ export function reelPrompt({ topic, narration = '', style = 'info', files = [], 
     `장면은 ${files.length > 4 ? files.length : 4}개 이상, 8개 이하로 구성한다. 장면마다 서로 다른 구체적인 세로 이미지 설명을 작성한다. 이미지에 글자와 로고는 넣지 않는다. tone은 normal, emphasis, whisper, excited 중 하나다.`,
     '자연스러운 감정 변화를 위해 장면당 짧은 문장 1~3개를 각각 lines로 나눈다. 공감과 설명은 normal, 중요한 전환과 결론은 emphasis, 조심스럽거나 궁금한 대목에만 whisper, 기쁜 내용에만 excited를 쓴다. 과장하거나 모든 문장에 감정을 넣지 않는다.',
     ...(files.length ? [`사용자가 첨부한 이미지·영상이 ${files.length}개 있다. 이 순서대로 장면에 사용하므로 전체 파일이 쓰이도록 ${files.length}개 이상의 장면으로 나눈다.`] : []),
+    UPLOAD_RULE.replace(/^- /, ''),
     '현재 작업 폴더 밖의 파일을 수정하지 않는다. 대본 외의 설명을 화면에 넣지 않는다. 질문하지 말고 파일을 작성하고 완료한다.'
   ].join('\n');
 }

@@ -4,7 +4,7 @@ import { Tour, TOURS, TOUR_OF_TAB, TourContext } from './tour';
 import { DialogProvider, useDialog } from './dialog';
 import { createPortal } from 'react-dom';
 import { TITLE_STYLES, TITLE_FONTS, CLIP_STYLES, KIND_DEFAULTS } from '../title-styles.mjs';
-import { SHORT_KINDS, LENGTH_NAMES, lengthText, kindOf } from '../shorts-kinds.mjs';
+import { SHORT_KINDS, LENGTH_NAMES, lengthText, kindOf, uploadTitle, hashtagsOf } from '../shorts-kinds.mjs';
 import Campaigns from './campaigns';
 
 // 서버(server.mjs)는 x-bh 헤더가 없는 POST를 막는다 (다른 사이트발 요청 차단)
@@ -27,7 +27,7 @@ const MENU = [
   { group: '자동화', items: [['autoshorts', '쇼츠 자동화', 'rocket'], ['visits', '댓글 답방', 'check'], ['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
   { group: '관리', items: [['posts', '글 목록', 'books'], ['jobs', '작업 로그', 'clipboard'], ['settings', '설정', 'gear']] }
 ];
-const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비', poses: '캐릭터 포즈', autoshorts: '쇼츠 자동화' };
+const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비', poses: '캐릭터 포즈', autoshorts: '쇼츠 자동화', character: '캐릭터 숏폼' };
 const STATUS = { running: ['hourglass', '진행 중'], done: ['check', '완료'], failed: ['cross', '실패'] };
 
 // 오래 걸리는 일(새로고침·로그인 창·세션 확인)은 다른 화면에 다녀와도 '진행 중'이 남아야 한다.
@@ -825,18 +825,18 @@ function ClipForm({ startJob, kind = 'celeb' }) {
 }
 
 // 만든 숏폼 목록(모든 탭 공통): 편 목록 → 자동 제작 → 보고 올리기. kind가 있으면 그 탭 것만
-const plainTitle = (s) => (s.script?.title || []).join(' ').replace(/\*/g, '');
+const plainTitle = (s) => (s.script ? uploadTitle(s.script) : '');
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); } catch { throw new Error('복사하지 못했습니다. 글을 직접 선택해 복사해 주세요'); }
 }
-const jobKind = (j) => (j.type === 'clip' ? (j.input.kind === 'viral' ? 'viral' : 'celeb') : j.type === 'reel' ? 'topic' : j.type === 'shorts' ? 'material' : null);
+const jobKind = (j) => (j.type === 'clip' ? (j.input.kind === 'viral' ? 'viral' : 'celeb') : j.type === 'reel' ? 'topic' : j.type === 'shorts' ? 'material' : j.type === 'character' ? 'character' : null);
 function ShortBoard({ startJob, jobs, kind }) {
   const [shortList, load] = useApiData('/api/shorts');
   const [filter, setFilter] = useSticky('shorts-board-filter', 'todo');
   const [open, setOpen] = useState(null);
   const [editing, setEditing] = useState(false);
   const [ytUrl, setYtUrl] = useState('');
-  const doneCount = jobs.filter((j) => ['clip', 'reel', 'shorts', 'render'].includes(j.type) && j.status !== 'running').length;
+  const doneCount = jobs.filter((j) => ['clip', 'reel', 'shorts', 'render', 'character'].includes(j.type) && j.status !== 'running').length;
   useEffect(() => { load(); }, [load, doneCount]);
   const making = jobs.filter((j) => j.status === 'running' && jobKind(j) === kind);
   const all = (shortList || []).filter((s) => s.script && kindOf(s.script) === kind);
@@ -845,7 +845,7 @@ function ShortBoard({ startJob, jobs, kind }) {
   useEffect(() => { setYtUrl(cur?.script?.uploaded?.url || ''); }, [cur?.dir, cur?.script?.uploaded?.url]);
   const saveUploaded = async (uploaded) => { await post('/api/shorts/uploaded', { dir: cur.dir, uploaded, url: ytUrl.trim() }); await load(); };
   const sc = cur?.script;
-  const uploadText = sc ? `${(sc.description || '').trim()}\n\n${(sc.hashtags || []).join(' ')}`.trim() : '';
+  const uploadText = sc ? `${(sc.description || '').trim()}\n\n${hashtagsOf(sc).join(' ')}`.trim() : '';
   const fileUrl = (api, s) => `/api/shorts/${api}?dir=${encodeURIComponent(s.dir)}&v=${encodeURIComponent(s.video)}`;
   return (
     <section className="panel clip-board" data-tour="shorts-list">
@@ -1679,6 +1679,40 @@ function AutoShorts({ jobs, startJob, go, config, reload }) {
   );
 }
 
+// 캐릭터 숏폼 3. 영상 만들기: 주제 + 형식 + 길이 → 대본·배경·목소리·무대(작업 'character')
+function CharMake({ data, startJob, approved }) {
+  const [form, setForm] = useSticky('char-make', { topic: '', format: 'tuk', length: 'normal', notes: '' });
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const ok = approved.includes('idle') && approved.length >= 4;
+  const fmt = data.formats?.[form.format];
+  const run = async () => {
+    if (!form.topic.trim()) throw new Error('주제를 입력해 주세요');
+    await startJob({ type: 'character', topic: form.topic.trim(), format: form.format, length: form.length, notes: form.notes.trim() }, { stay: true });
+  };
+  return (
+    <section className="panel">
+      <h2 className="panel-title">3. 영상 만들기</h2>
+      {!ok ? <p className="muted">포즈를 4개 이상(기본 포함) 승인하면 열립니다.</p> : <>
+        <label className="field"><span>주제</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder={fmt?.example ? `예: ${fmt.example}` : '예: 월급날 국룰'} /></label>
+        <div className="grid2">
+          <label className="field"><span>형식</span>
+            <select value={form.format} onChange={set('format')}>{Object.entries(data.formats || {}).map(([id, f]) => <option key={id} value={id}>{f.name}</option>)}</select>
+            <small>{fmt?.desc}</small>
+          </label>
+          <label className="field"><span>길이</span>
+            <select value={form.length} onChange={set('length')}><option value="short">짧게 (20~30초)</option><option value="normal">보통 (30~40초)</option><option value="long">길게 (40~55초)</option></select>
+          </label>
+        </div>
+        <label className="field"><span>요청사항 (선택)</span><input value={form.notes} onChange={set('notes')} placeholder="예: 마지막은 반전으로, 회사원 공감 위주" /></label>
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+          <Action primary big run={run}>만들기</Action>
+          <span className="muted">{data.name}가 남자 목소리로 말합니다. 대본·배경 그림·렌더까지 10분 안팎</span>
+        </div>
+      </>}
+    </section>
+  );
+}
+
 // 캐릭터 숏폼(docs/캐릭터-숏폼-설계.md). 1단계: 캐릭터 정하기 + 포즈 세트 만들기·검수. 영상 만들기는 포즈 승인 뒤 다음 단계에서 붙인다
 function Character({ jobs, startJob, go }) {
   const dialog = useDialog();
@@ -1737,10 +1771,8 @@ function Character({ jobs, startJob, go }) {
           })}
         </div>
       </section>
-      <section className="panel">
-        <h2 className="panel-title">3. 영상 만들기</h2>
-        <p className="muted">포즈를 승인한 뒤 열립니다(다음 단계에서 붙입니다).</p>
-      </section>
+      <CharMake data={data} startJob={startJob} approved={approved} />
+      {approved.length > 0 && <ShortBoard startJob={startJob} jobs={jobs} kind="character" />}
     </>
   );
 }

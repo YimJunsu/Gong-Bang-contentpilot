@@ -1,0 +1,118 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- 캐릭터 숏폼 무대(docs/캐릭터-숏폼-설계.md). character-render.mjs가 장면마다 setup()을 한 번 부르고,
+     프레임마다 renderAt(t)로 시간을 넘기며 캡처한다(stage.html과 같은 방식). renderAt은 t만 보고 그린다(순수).
+     층: 배경 그림(천천히 확대) → 캐릭터(포즈 그림 + 움직임) → 효과(땀·반짝·화남·물음표·하트) → 위 '팡' 글자 → 아래 자막 -->
+<style>
+  html, body { margin:0; width:1080px; height:1920px; overflow:hidden; background:#1b2233; }
+  #bg { position:absolute; inset:0; background:#1b2233 center/cover no-repeat; transform-origin:50% 60%; }
+  #shade { position:absolute; left:0; right:0; bottom:0; height:900px; background:linear-gradient(transparent, rgba(0,0,0,.28)); }
+  #char { position:absolute; left:540px; bottom:90px; width:0; height:0; }
+  #char img { position:absolute; bottom:0; left:0; height:880px; transform:translateX(-50%); display:none; filter:drop-shadow(0 26px 22px rgba(0,0,0,.35)); }
+  #fx { position:absolute; inset:0; pointer-events:none; }
+  .fx { position:absolute; font-family:P; line-height:1; }
+  #pops { position:absolute; left:40px; right:40px; top:250px; height:520px; }
+  .pop { position:absolute; font-family:P; font-size:150px; line-height:1; color:#fff; -webkit-text-stroke:22px #1d1d2b; paint-order:stroke fill;
+         text-shadow:0 10px 0 rgba(0,0,0,.25); white-space:nowrap; transform-origin:50% 60%; }
+  .pop em { font-style:normal; color:var(--hi); }
+  #cap { position:absolute; left:60px; right:60px; bottom:300px; text-align:center; word-break:keep-all; }
+  #cap div { display:inline-block; font-family:B; font-size:66px; line-height:1.3; color:#fff; -webkit-text-stroke:14px #111; paint-order:stroke fill; }
+  #cap em { font-style:normal; color:#ffd21f; }
+</style></head>
+<body>
+  <div id="bg"></div><div id="shade"></div>
+  <div id="char"></div>
+  <div id="fx"></div>
+  <div id="pops"></div>
+  <div id="cap"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const marked = (text) => esc(text).replace(/\*(.+?)\*/g, '<em>$1</em>');
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const back = (x) => { x = clamp(x); const c = 1.9; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+// 말할 때 입 벌린 그림과 번갈아 보여 줄 포즈(표정이 크게 다른 포즈는 바꾸지 않는다)
+const FLAP = { idle: 'talk', talk: 'idle', smug: 'talk', think: 'talk', point_left: null, point_right: null, thumbs: null };
+let D = null;
+const imgs = {};
+
+window.setup = async (data) => {
+  D = data;
+  for (const [family, url] of Object.entries(data.fonts)) { const f = new FontFace(family, `url("${url}")`); await f.load(); document.fonts.add(f); }
+  $('#bg').style.backgroundImage = data.bg ? `url("${data.bg}")` : '';
+  const box = $('#char');
+  await Promise.all(Object.entries(data.poses).map(([id, url]) => new Promise((ok) => {
+    const im = new Image(); im.onload = ok; im.onerror = ok; im.src = url; box.appendChild(im); imgs[id] = im;
+  })));
+  // 팡 글자: 줄마다 1~3개를 위쪽 영역에 엇갈리게 배치(위치·기울기는 미리 정해 둔다 — renderAt이 순수하도록)
+  const layer = $('#pops');
+  data.beats.forEach((b, bi) => (b.pop || []).forEach((p, k) => {
+    const el = document.createElement('div');
+    el.className = 'pop'; el.innerHTML = marked(p.text); el.style.setProperty('--hi', ['#ffd21f', '#7dffd1', '#ff8fbf'][bi % 3]);
+    layer.appendChild(el);
+    const n = b.pop.length;
+    const slots = n === 1 ? [[50, 45]] : n === 2 ? [[30, 25], [70, 62]] : [[24, 18], [74, 34], [48, 75]];
+    const [x, y] = slots[k];
+    p.el = el; p.x = x; p.y = y; p.rot = ((bi * 7 + k * 13) % 17) - 8;
+    el.style.left = `${x}%`; el.style.top = `${y}%`;
+    // 너무 길면 줄인다
+    const w = el.getBoundingClientRect().width;
+    p.scale = Math.min(1, 900 / Math.max(1, w));
+  }));
+  await document.fonts.ready;
+};
+
+function beatAt(t) { let cur = D.beats[0]; for (const b of D.beats) if (t >= b.start) cur = b; return cur; }
+
+window.renderAt = (t) => {
+  // 배경: 장면 내내 아주 천천히 확대
+  $('#bg').style.transform = `scale(${1.04 + 0.06 * (t / Math.max(1, D.seconds))})`;
+  const b = beatAt(t);
+  const lt = t - b.start; // 이 줄이 시작하고 지난 시간
+  // 포즈: 말하는 동안(문장 소리 구간) 0.16초마다 입 모양 번갈아
+  let pose = D.poses[b.pose] ? b.pose : 'idle';
+  if (b.speaking && t < b.voiceEnd && FLAP[pose] && D.poses[FLAP[pose]] && Math.floor(t / 0.16) % 2) pose = FLAP[pose];
+  for (const [id, im] of Object.entries(imgs)) im.style.display = id === pose ? 'block' : 'none';
+  // 움직임: 숨쉬기(늘) + 줄 시작 때 동작
+  let x = 0, y = 0, sx = 1, sy = 1, rot = 0, s = 1;
+  const breathe = Math.sin(t * 2.6) * 0.012; sx += -breathe * 0.6; sy += breathe;
+  const m = b.move || 'idle';
+  if (m === 'bounce') { const k = Math.max(0, 1 - lt / 0.5); const v = Math.sin(lt * 18) * k; sx += v * 0.08; sy -= v * 0.08; y -= Math.abs(Math.sin(lt * 9)) * 40 * k; }
+  if (m === 'shake') { const k = Math.max(0, 1 - lt / 0.6); x += Math.sin(lt * 70) * 22 * k; rot += Math.sin(lt * 55) * 3 * k; }
+  if (m === 'pop') { s *= lt < 0.35 ? 0.6 + 0.4 * back(lt / 0.35) : 1; }
+  if (m === 'zoom') { s *= 1 + 0.22 * ease(lt / 0.4); y += 120 * ease(lt / 0.4); }
+  if (m === 'jump') { const p = clamp(lt / 0.55); y -= Math.sin(p * Math.PI) * 220; if (p >= 1) { const k = Math.max(0, 1 - (lt - 0.55) / 0.25); sy -= 0.1 * k; sx += 0.1 * k; } }
+  if (m === 'slide') { x += (1 - ease(lt / 0.45)) * (b.dir || 1) * 700; }
+  if (m === 'tilt') { rot += Math.sin(Math.min(lt, 1.2) * 4) * 7 * Math.max(0, 1 - lt / 1.6); }
+  if (m === 'nod') { y += Math.abs(Math.sin(lt * 7)) * 18 * Math.max(0, 1 - lt / 1.2); }
+  $('#char').style.transform = `translate(${x}px, ${y}px) rotate(${rot}deg) scale(${s * sx}, ${s * sy})`;
+  $('#char').style.transformOrigin = '0 0';
+  // 효과: 캐릭터 머리 근처. 줄 시작 후 나타나 흔들린다
+  const fx = [];
+  const appear = ease(lt / 0.3);
+  for (const f of b.fx || []) {
+    if (f === 'sweat') for (let k = 0; k < 2; k += 1) { const p = ((lt * 0.9 + k * 0.5) % 1); fx.push(`<div class="fx" style="left:${760 + k * 50}px;top:${930 + p * 120}px;font-size:${70 - k * 16}px;color:#7cc7ff;opacity:${(1 - p) * appear}">💧</div>`); }
+    if (f === 'sparkle') for (let k = 0; k < 3; k += 1) { const tw = 0.6 + 0.4 * Math.sin(lt * 8 + k * 2); fx.push(`<div class="fx" style="left:${[200, 830, 260][k]}px;top:${[930, 1000, 1250][k]}px;font-size:${[90, 70, 60][k] * tw}px;color:#ffe14d;opacity:${appear}">✦</div>`); }
+    if (f === 'anger') { const pulse = 1 + 0.15 * Math.sin(lt * 14); fx.push(`<div class="fx" style="left:770px;top:900px;font-size:${120 * pulse * appear}px;color:#ff3b4d;-webkit-text-stroke:6px #fff;paint-order:stroke fill">✚</div>`); }
+    if (f === 'question') for (let k = 0; k < 2; k += 1) fx.push(`<div class="fx" style="left:${780 + k * 80}px;top:${880 - k * 70 + Math.sin(lt * 4 + k) * 12}px;font-size:${110 - k * 25}px;color:#fff;-webkit-text-stroke:10px #1d1d2b;paint-order:stroke fill;opacity:${appear};transform:rotate(${k ? 14 : -8}deg)">?</div>`);
+    if (f === 'heart') for (let k = 0; k < 3; k += 1) { const p = ((lt * 0.6 + k * 0.33) % 1); fx.push(`<div class="fx" style="left:${[230, 820, 520][k]}px;top:${1100 - p * 300}px;font-size:70px;color:#ff6f9f;opacity:${(1 - p) * appear}">♥</div>`); }
+    if (f === 'shock') for (let k = 0; k < 3; k += 1) { const a = (-60 + k * 30) * Math.PI / 180; const r = 360 + 20 * Math.sin(lt * 20); fx.push(`<div class="fx" style="left:${540 + Math.sin(a) * r}px;top:${1050 - Math.cos(a) * r}px;width:14px;height:${70 * appear}px;background:#fff;border-radius:7px;border:5px solid #1d1d2b;transform:rotate(${(-60 + k * 30)}deg)"></div>`); }
+  }
+  $('#fx').innerHTML = fx.join('');
+  // 팡 글자: 나타날 때 커졌다 제자리, 그 줄 동안 남는다
+  for (const bb of D.beats) for (const p of bb.pop || []) {
+    const on = t >= p.at && t < bb.end;
+    if (!on) { p.el.style.opacity = 0; continue; }
+    const k = t - p.at;
+    const sc = (k < 0.28 ? 0.3 + 0.7 * back(k / 0.28) : 1) * p.scale;
+    const wob = Math.sin(k * 3 + p.rot) * 1.5;
+    p.el.style.opacity = 1;
+    p.el.style.transform = `translate(-50%, -50%) rotate(${p.rot + wob}deg) scale(${sc})`;
+  }
+  // 자막: 그 줄 문장
+  const c = D.captions.find((x) => t >= x.start && t < x.end);
+  const html = c ? `<div>${marked(c.text).split('|').join('<br>')}</div>` : '';
+  if ($('#cap').innerHTML !== html) $('#cap').innerHTML = html;
+};
+</script></body></html>

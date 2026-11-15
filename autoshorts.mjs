@@ -15,6 +15,8 @@ export const AUTO_CATS = {
 };
 
 const MIN_SEC = 15, MAX_SEC = 15 * 60;
+// 정치·시사·사건사고는 자동으로 만들지 않는다(말 위주 + 논란). 토크쇼 독백(monologue)도 말 위주라 뺀다
+export const SENSITIVE = /trump|biden|harris|obama|election|midterm|congress|senate|politic|republican|democrat|president|\bwar\b|ukraine|israel|gaza|shooting|killed|police|news|monologue|daily show|last week tonight|gop|maga|governor|vote|voter|campaign|대통령|정치|선거|국회|탄핵|뉴스|사건|사고|사망/i;
 const iso = (d) => { const m = String(d || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0; };
 
 // YouTube 공식 인기 차트. 키가 틀렸거나 그 분야 차트가 없으면 오류 → 부르는 쪽이 검색으로 넘어간다
@@ -36,6 +38,7 @@ export function pickFresh(list, cat, used, n) {
   return list
     .filter((v) => v?.id && !used.has(v.id) && !seen.has(v.id) && seen.add(v.id))
     .filter((v) => v.duration >= MIN_SEC && v.duration <= MAX_SEC)
+    .filter((v) => !SENSITIVE.test(`${v.title} ${v.channel}`))
     .filter((v) => (cat.kind === 'viral' ? notCompilation(v) : v.verified))
     .sort((a, b) => (b.views || 0) - (a.views || 0))
     .slice(0, n);
