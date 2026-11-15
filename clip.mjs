@@ -12,6 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ffmpegPath from 'ffmpeg-static';
 import { chromium } from 'playwright-core';
 import { ffmpeg, duration, FONT_CHOICES } from './video.mjs';
+import { clipStyleOf, KIND_DEFAULTS } from './title-styles.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS = path.join(HERE, 'assets', 'fonts');
@@ -86,7 +87,7 @@ export function pickPrompt({ topic, notes = '' }, found) {
     ...found.map((v) => `- id=${v.id} | ${v.channel} | ${v.duration}초 | 조회 ${v.views} | ${v.title}`)
   ].filter(Boolean).join('\n');
 }
-export function scriptPrompt({ topic, notes = '', mute = false }, sources) {
+export function scriptPrompt({ topic, notes = '', mute = false, seconds = [15, 40] }, sources) {
   return [
     '세로(9:16) 유튜브 쇼츠를 만든다. 아래 원본 영상에서 구간을 골라 이어 붙이고, 위에 훅 제목·아래에 자막을 얹는다. 결과는 이 폴더의 script.json 하나다.',
     `인물·화제: ${topic}`,
@@ -101,7 +102,7 @@ export function scriptPrompt({ topic, notes = '', mute = false }, sources) {
     '',
     'script.json 형식:',
     '{"title":["윗줄(14자 이내)","아랫줄(14자 이내, *강조* 1곳)"],"scenes":[{"src":1,"start":12,"end":17.5,"focus":[50,40],"caption":"큰 자막(16자 이내)","sub":"작은 자막(22자 이내) 또는 빈 문자열"}],"description":"업로드 설명 2~3줄(출처는 자동으로 붙으니 쓰지 않는다)","hashtags":["#태그"],"sound":"어울리는 음악 분위기 한 줄"}',
-    '- 구간 3~6개, 하나에 3~8초, 합쳐서 15~40초. 원본 길이 안에서. 인물이 화면에 크게, 표정·동작이 살아 있는 구간을 고른다(장면 전환·자막·광고 화면 피함).',
+    `- 구간 3~6개, 하나에 3~8초, 합쳐서 ${seconds[0]}~${seconds[1]}초. 원본 길이 안에서. 인물이 화면에 크게, 표정·동작이 살아 있는 구간을 고른다(장면 전환·자막·광고 화면 피함).`,
     '- 첫 구간이 가장 강한 장면(훅). 제목 두 줄은 영상 내내 위에 고정되는 훅: 반전·궁금증·비교형("이 얼굴로 센 콘셉트 하면", "무대만 서면 달라지는"). "*별표*"는 노란 강조.',
     '- focus: 세로로 자를 때 중심 [가로%, 세로%]. 원본에서 인물 얼굴·몸 중심 위치. 기본 [50,40].',
     '- caption은 그 장면에 대한 해설·리액션, sub는 드립·보충(선택). 구어체, 짧게.',
@@ -154,7 +155,9 @@ export async function renderClip(dir, script, { chromePath, log = () => {} } = {
   const work = path.join(dir, 'build');
   await fs.rm(work, { recursive: true, force: true });
   await fs.mkdir(work, { recursive: true });
-  const face = FONT_CHOICES[script.font] || FONT_CHOICES.blackhan;
+  // 글꼴: 고른 것(titleFont) → 예전 대본의 font → 탭 기본값. 색 조합: clipStyle(title-styles.mjs CLIP_STYLES)
+  const face = FONT_CHOICES[script.titleFont] || FONT_CHOICES[script.font] || FONT_CHOICES[(KIND_DEFAULTS[script.kind] || KIND_DEFAULTS.celeb).font] || FONT_CHOICES.blackhan;
+  const style = clipStyleOf(script);
   const fonts = { T: pathToFileURL(path.join(FONTS, face.file)).href, B: pathToFileURL(path.join(FONTS, 'Pretendard-ExtraBold.otf')).href };
   const sources = new Map((script.sources || []).map((s) => [s.n, s]));
   const browser = await chromium.launch({ executablePath: chromePath, headless: true, args: ['--allow-file-access-from-files'] });
@@ -167,7 +170,7 @@ export async function renderClip(dir, script, { chromePath, log = () => {} } = {
       if (!src) throw new Error(`장면 ${i + 1}: 원본 ${s.src}가 없습니다`);
       const file = path.resolve(dir, src.file);
       const png = path.join(work, `text-${i + 1}.png`);
-      await page.evaluate((d) => window.setup(d), { fonts, title: script.title || [], caption: s.caption, sub: s.sub, credit: src.channel ? `출처: ${src.channel}` : '' });
+      await page.evaluate((d) => window.setup(d), { fonts, style, title: script.title || [], caption: s.caption, sub: s.sub, credit: src.channel ? `출처: ${src.channel}` : '' });
       await page.screenshot({ path: png, omitBackground: true });
       const len = (s.end - s.start).toFixed(2);
       const audio = script.mute

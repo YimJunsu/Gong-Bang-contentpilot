@@ -75,7 +75,9 @@ export async function session(config, profile) {
     // 내 블로그 주소로 보내 주는 경로에서 blogId를 읽는다
     await page.goto('https://blog.naver.com/MyBlog.naver', { waitUntil: 'domcontentloaded', timeout: 30_000 });
     const blogId = new URL(page.url()).pathname.split('/').filter(Boolean)[0] || '';
-    return { loggedIn: true, blogId: /^[\w-]+$/.test(blogId) && blogId !== 'MyBlog.naver' ? blogId : '' };
+    // 쿠키가 남아 있어도 만료됐으면 내 블로그로 못 간다(2026-11-15 실측: 쿠키는 있는데 댓글창이 '로그인 해주세요') → 로그인 필요로 본다
+    if (/nid\.naver\.com/.test(page.url()) || !/^[\w-]+$/.test(blogId) || blogId === 'MyBlog.naver') return { loggedIn: false, expired: true };
+    return { loggedIn: true, blogId };
   });
 }
 

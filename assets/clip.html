@@ -5,9 +5,12 @@
 <style>
   html, body { margin:0; width:1080px; height:1920px; overflow:hidden; background:transparent; }
   #band { position:absolute; left:0; top:0; width:1080px; height:440px; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
-  .t1 { font-family:T; font-size:92px; line-height:1.1; color:#fff; letter-spacing:-2px; text-align:center; padding:0 40px; }
-  .t2 { font-family:T; font-size:92px; line-height:1.1; color:#fff; letter-spacing:-2px; text-align:center; background:#e5007d; padding:6px 26px 12px; border-radius:6px; }
-  .t1 em, .t2 em { font-style:normal; color:#ffe600; }
+  /* 두 줄 색·박스는 setup()의 style(title-styles.mjs CLIP_STYLES)로 정한다 */
+  #band { --t1:#fff; --t1box:transparent; --t2:#fff; --t2box:#e5007d; --em:#ffe600; }
+  .t1, .t2 { font-family:T; font-size:92px; line-height:1.1; letter-spacing:-2px; text-align:center; max-width:1000px; padding:6px 26px 12px; border-radius:6px; }
+  .t1 { color:var(--t1); background:var(--t1box); }
+  .t2 { color:var(--t2); background:var(--t2box); }
+  .t1 em, .t2 em { font-style:normal; color:var(--em); }
   #credit { position:absolute; right:24px; top:464px; padding:6px 16px; border-radius:8px; background:rgba(0,0,0,.55); color:#fff; font:30px B; }
   #cap { position:absolute; left:50px; right:50px; bottom:150px; text-align:center; word-break:keep-all; }
   .c1 { font-family:B; font-size:72px; line-height:1.25; color:#fff; -webkit-text-stroke:14px #000; paint-order:stroke fill; }
@@ -24,11 +27,13 @@ const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const marked = (text) => esc(text).replace(/\*(.+?)\*/g, '<em>$1</em>');
 let loaded = false;
-window.setup = async ({ fonts, title, caption, sub, credit }) => {
+window.setup = async ({ fonts, style = {}, title, caption, sub, credit }) => {
   if (!loaded) {
     for (const [family, url] of Object.entries(fonts)) { const f = new FontFace(family, `url("${url}")`); await f.load(); document.fonts.add(f); }
     loaded = true;
   }
+  const band = $('#band');
+  for (const [k, v] of [['--t1', style.t1], ['--t1box', style.t1Box || 'transparent'], ['--t2', style.t2], ['--t2box', style.t2Box || 'transparent'], ['--em', style.em]]) if (v) band.style.setProperty(k, v);
   const [a = '', b = ''] = title;
   $('#band').innerHTML = `${a ? `<div class="t1">${marked(a)}</div>` : ''}${b ? `<div class="t2">${marked(b)}</div>` : ''}`;
   $('#credit').style.display = credit ? '' : 'none';

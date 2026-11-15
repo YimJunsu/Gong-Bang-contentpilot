@@ -501,3 +501,5 @@ dialog.modal.retry { width: min(620px, 94vw); }
   .clip-board { grid-template-columns: minmax(0, 1fr); }
   .clip-list { max-height: none; }
 }
+.fontsample.clipband { background: #000; -webkit-text-stroke: 0; font-size: 26px; display: grid; gap: 6px; }
+.shorts-tabs { flex-wrap: wrap; }

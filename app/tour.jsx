@@ -186,7 +186,7 @@ export const TOURS = {
   ]
 };
 // 화면 → 그 화면 안내
-export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', campaigns: 'campaigns', write: 'write', shorts: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
+export const TOUR_OF_TAB = { visits: 'visits', auto: 'auto', insta: 'insta', threads: 'threads', home: 'home', reward: 'topics', shortents: 'shortents', campaigns: 'campaigns', write: 'write', shorts: 'shorts', shortform: 'shorts', reel: 'shorts', clip: 'shorts', posts: 'posts', jobs: 'jobs', settings: 'settings' };
 
 const GAP = 14, W = 400;
 export function Tour({ steps, onClose, go }) {

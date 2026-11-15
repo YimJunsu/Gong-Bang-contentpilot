@@ -3,7 +3,8 @@ import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalSt
 import { Tour, TOURS, TOUR_OF_TAB, TourContext } from './tour';
 import { DialogProvider, useDialog } from './dialog';
 import { createPortal } from 'react-dom';
-import { TITLE_STYLES } from '../title-styles.mjs';
+import { TITLE_STYLES, TITLE_FONTS, CLIP_STYLES, KIND_DEFAULTS } from '../title-styles.mjs';
+import { SHORT_KINDS, LENGTH_NAMES, lengthText, kindOf } from '../shorts-kinds.mjs';
 import Campaigns from './campaigns';
 
 // 서버(server.mjs)는 x-bh 헤더가 없는 POST를 막는다 (다른 사이트발 요청 차단)
@@ -22,7 +23,7 @@ const Emoji = ({ name, size = 22 }) => <img className="emoji" src={`/emoji/${nam
 const MENU = [
   { group: null, items: [['home', '대시보드', 'chart']] },
   { group: '찾기', items: [['reward', '핫 키워드', 'fire'], ['shortents', '숏텐츠', 'news'], ['campaigns', '체험단 정보 조회', 'news']] },
-  { group: '만들기', items: [['write', '글 생성하기', 'memo'], ['shorts', '숏폼 만들기', 'clapper'], ['reel', '릴스·쇼츠 만들기', 'clapper'], ['clip', '클립 숏폼', 'clapper']] },
+  { group: '만들기', items: [['write', '글 생성하기', 'memo'], ['shortform', '숏폼', 'clapper']] },
   { group: '자동화', items: [['visits', '댓글 답방', 'check'], ['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
   { group: '관리', items: [['posts', '글 목록', 'books'], ['jobs', '작업 로그', 'clipboard'], ['settings', '설정', 'gear']] }
 ];
@@ -281,9 +282,11 @@ export default function Page() {
     insta: <Soon id="insta" title="인스타 자동화" desc="만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
     threads: <Soon id="threads" title="스레드 자동화" desc="만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
     write: <Write draft={draft} setDraft={setDraft} engine={state?.config?.engine} startJob={startJob} categories={state?.categories || []} hasRules={state?.hasRules} naver={naverOf(state?.config)} rootOk={state?.rootOk} root={state?.root} go={go} />,
-    shorts: state && <Shorts config={state.config} reload={loadState} startJob={startJob} jobs={jobs} />,
-    reel: state && <Reel config={state.config} reload={loadState} startJob={startJob} jobs={jobs} />,
-    clip: <Clip startJob={startJob} jobs={jobs} />,
+    shortform: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} />,
+    // 예전 메뉴 주소(알림·저장된 탭)는 숏폼의 해당 탭으로
+    shorts: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="material" />,
+    reel: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="topic" />,
+    clip: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="celeb" />,
     posts: <Posts posts={posts} startJob={startJob} categories={state?.categories || []} naver={naverOf(state?.config)} reload={() => { loadPosts().catch(() => {}); loadState().catch(() => {}); }} />,
     jobs: <Jobs jobs={jobs} reload={loadJobs} />,
     settings: state && <Settings config={state.config} sessions={state.accounts || {}} loggingIn={state.loggingIn} reload={loadState} />
@@ -735,7 +738,9 @@ function Jobs({ jobs, reload }) {
 }
 
 // ---- 숏폼 만들기 ----
-function Reel({ config, reload, startJob, jobs }) {
+function Reel({ config, reload, startJob }) {
+  const [look, setLook] = useSticky('shorts-look-topic', KIND_DEFAULTS.topic);
+  const [length, setLength] = useSticky('shorts-length-topic', 'normal');
   const [topic, setTopic] = useState('');
   const [narration, setNarration] = useState('');
   const [style, setStyle] = useState('info');
@@ -743,11 +748,6 @@ function Reel({ config, reload, startJob, jobs }) {
   const [suggestions, setSuggestions] = useState(null);
   const [files, setFiles] = useState([]);
   const [note, setNote] = useState('');
-  const [shortList, load] = useApiData('/api/shorts');
-  const [open, setOpen] = useState(null);
-  const doneCount = jobs.filter((j) => ['reel', 'render'].includes(j.type) && j.status !== 'running').length;
-  useEffect(() => { load(); }, [load, doneCount]);
-  const current = (shortList || []).find((s) => s.dir === open);
   const recommend = async () => setSuggestions(await post('/api/reel/topics', { interest, style }));
   const submit = async () => {
     if (!topic.trim()) throw new Error('주제를 입력해 주세요');
@@ -760,10 +760,10 @@ function Reel({ config, reload, startJob, jobs }) {
       paths.push((await api(`/api/upload?batch=${batch}&name=${encodeURIComponent(`${i + 1}-${file.name}`)}`, { method: 'POST', body: file })).path);
     }
     setNote('');
-    await startJob({ type: 'reel', topic: topic.trim(), narration: narration.trim(), style, files: paths });
+    await startJob({ type: 'reel', topic: topic.trim(), narration: narration.trim(), style, length, titleFont: look.font, titleStyle: look.titleStyle, files: paths }, { stay: true });
+    setTopic(''); setNarration(''); setFiles([]);
   };
   return <>
-    <Head title="릴스·쇼츠 만들기" desc="주제에 맞는 대본과 이미지를 만들고 음성·자막을 넣어 세로 영상으로 완성합니다" />
     <section className="panel">
       <label className="field"><span>관심 분야로 주제 추천받기 (선택)</span><input value={interest} onChange={(e) => setInterest(e.target.value)} placeholder="예: 20대 취업, 직장 생활, 돈 관리" /></label>
       <div className="row"><Action run={recommend} loading track="reel-topics">AI 주제 추천받기</Action><span className="muted">비워 두면 여러 분야에서 추천합니다.</span></div>
@@ -775,65 +775,85 @@ function Reel({ config, reload, startJob, jobs }) {
       <label className="field"><span>영상 형식</span><select value={style} onChange={(e) => setStyle(e.target.value)}><option value="info">정보 알려주기</option><option value="story">이야기 들려주기</option></select></label>
       <label className="field"><span>직접 쓴 대본 (선택)</span><textarea value={narration} onChange={(e) => setNarration(e.target.value)} placeholder="비워 두면 주제에 맞춰 대본을 만듭니다" /><small>입력한 대본은 그대로 읽습니다.</small></label>
       <div className="field"><span>직접 넣을 이미지·영상 (선택)</span><FilePick files={files} setFiles={setFiles} accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm" hint="이미지나 영상 최대 8개 · JPG, PNG, WEBP, GIF, MP4, WEBM" /><small>첨부한 순서대로 장면에 사용합니다. 첨부하지 않으면 Codex가 이미지를 만듭니다.</small></div>
+      <LookPick kind="topic" value={look} onChange={setLook} />
+      <LengthPick kind="topic" value={length} onChange={setLength} />
       <VoiceSettings config={config} reload={reload} />
       <div className="note">{files.length ? '직접 넣은 이미지·영상을 사용합니다.' : 'Codex로 장면별 이미지를 생성합니다.'} 작업에 시간이 걸릴 수 있습니다.</div>
       <div className="row" style={{ marginTop: 18 }}><Action primary big run={submit}>영상 만들기 시작</Action><span className="muted">{note}</span></div>
     </section>
-    <section className="panel"><h2 className="panel-title">만든 영상</h2>
-      {(shortList || []).length ? <table><thead><tr><th>제목</th><th>영상</th></tr></thead><tbody>{shortList.map((s) => <tr key={s.dir} className="click" onClick={() => setOpen(s.dir)}><td><div className="title-cell">{(s.script?.title || []).join(' ').replace(/\*/g, '') || s.name}</div><div className="sub">{s.name}</div></td><td>{s.video ? when(s.video) : '아직 없음'}</td></tr>)}</tbody></table> : <Empty title="아직 만든 영상이 없습니다">위에서 주제를 입력해 시작해 보세요.</Empty>}
-    </section>
-    {current && <ShortDialog key={current.dir} short={current} onClose={() => setOpen(null)} startJob={startJob} />}
   </>;
 }
 
-// ---- 클립 숏폼: 인물·화제 → 유튜브 원본 구간 → 훅 제목·자막 얹은 세로 영상. 올리기는 사람이 (docs/클립-숏폼-설계.md) ----
-const plainTitle = (s) => (s.script?.title || []).join(' ').replace(/\*/g, '');
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); } catch { throw new Error('복사하지 못했습니다. 글을 직접 선택해 복사해 주세요'); }
+// 길이 고르기(짧게/보통/길게) — 탭마다 초 범위가 다르다(shorts-kinds.mjs)
+function LengthPick({ kind, value, onChange }) {
+  return (
+    <div className="field"><span>영상 길이</span>
+      <div className="segment" role="group" aria-label="영상 길이">
+        {Object.entries(LENGTH_NAMES).map(([id, name]) => <button key={id} type="button" className={value === id ? 'on' : ''} onClick={() => onChange(id)}>{name} <span className="n">{lengthText(kind, id)}</span></button>)}
+      </div>
+    </div>
+  );
 }
-function Clip({ startJob, jobs }) {
+
+// ① 연예인 핫(② 해외 재밌는 영상도 같은 틀): 인물·화제 → 유튜브 원본 구간 → 훅 제목·자막 얹은 세로 영상
+function ClipForm({ startJob, kind = 'celeb' }) {
   const [form, setForm] = useState({ topic: '', notes: '', links: '', mute: false });
-  const [shortList, load] = useApiData('/api/shorts');
-  const [filter, setFilter] = useState('todo');
-  const [open, setOpen] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [ytUrl, setYtUrl] = useState('');
-  const doneCount = jobs.filter((j) => ['clip', 'render'].includes(j.type) && j.status !== 'running').length;
-  useEffect(() => { load(); }, [load, doneCount]);
-  const making = jobs.filter((j) => j.type === 'clip' && j.status === 'running');
-  const all = (shortList || []).filter((s) => s.script?.layout === 'clip');
-  const list = filter === 'todo' ? all.filter((s) => !s.script.uploaded) : all;
-  const cur = list.find((s) => s.dir === open) || list[0];
-  useEffect(() => { setYtUrl(cur?.script?.uploaded?.url || ''); }, [cur?.dir, cur?.script?.uploaded?.url]);
+  const [length, setLength] = useSticky(`shorts-length-${kind}`, 'normal');
+  const [look, setLook] = useSticky(`shorts-look-${kind}`, KIND_DEFAULTS[kind]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
   const submit = async () => {
     const urls = linksOf(form.links);
     if (!form.topic.trim()) throw new Error('인물이나 화제를 입력해 주세요');
     if (urls.length > 3) throw new Error('영상 주소는 3개까지 넣을 수 있습니다');
-    await startJob({ type: 'clip', topic: form.topic.trim(), notes: form.notes.trim(), urls, mute: form.mute });
+    await startJob({ type: 'clip', kind, length, titleFont: look.font, clipStyle: look.clipStyle, topic: form.topic.trim(), notes: form.notes.trim(), urls, mute: form.mute }, { stay: true });
+    setForm((f) => ({ ...f, topic: '', notes: '', links: '' }));
   };
-  const saveUploaded = async (uploaded) => { await post('/api/shorts/uploaded', { dir: cur.dir, uploaded, url: ytUrl.trim() }); await load(); };
-  const sc = cur?.script;
-  const uploadText = sc ? `${(sc.description || '').trim()}\n\n${(sc.hashtags || []).join(' ')}`.trim() : '';
-  const fileUrl = (api, s) => `/api/shorts/${api}?dir=${encodeURIComponent(s.dir)}&v=${encodeURIComponent(s.video)}`;
-  return <>
-    <Head title="클립 숏폼" desc="인물·화제를 넣으면 유튜브 원본 영상에서 구간을 골라 훅 제목·자막을 얹은 세로 영상을 만듭니다. 올리기는 직접 합니다" />
+  return (
     <section className="panel">
       <label className="field"><span>인물·화제 (필수)</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder="예: 미야오 안나 직캠, 지수 대기실" /></label>
       <label className="field"><span>메모 (선택)</span><textarea value={form.notes} onChange={set('notes')} placeholder="예: 표정 위주로, 'GO HARD' 무대만, 제목은 반전형으로" /></label>
       <label className="field"><span>원본 영상 주소 (선택, 3개까지)</span><textarea value={form.links} onChange={set('links')} placeholder="https://youtu.be/...  비워 두면 인증(공식) 채널에서 찾습니다" /><small>남의 영상을 쓰므로 저작권 신고를 받을 수 있습니다. 공식 채널 영상을 짧게, 출처를 붙여 씁니다.</small></label>
+      <LookPick kind={kind} value={look} onChange={setLook} />
+      <LengthPick kind={kind} value={length} onChange={setLength} />
       <label className="row" style={{ marginBottom: 6 }}><input type="checkbox" checked={form.mute} onChange={set('mute')} /><span>원본 소리 끄기 <span className="muted">— 음악은 업로드할 때 유튜브에서 고릅니다(저작권 신고가 줄어듭니다)</span></span></label>
-      <div className="row" style={{ marginTop: 14 }}><Action primary big run={submit}>클립 숏폼 만들기 시작</Action><span className="muted">원본 받기·AI 구간 고르기·렌더링까지 몇 분 걸립니다.</span></div>
+      <div className="row" style={{ marginTop: 14 }}><Action primary big run={submit}>만들기 시작</Action><span className="muted">원본 받기·AI 구간 고르기·렌더링까지 몇 분 걸립니다. 아래 목록에서 진행이 보입니다.</span></div>
     </section>
-    <section className="panel clip-board">
+  );
+}
+
+// 만든 숏폼 목록(모든 탭 공통): 편 목록 → 자동 제작 → 보고 올리기. kind가 있으면 그 탭 것만
+const plainTitle = (s) => (s.script?.title || []).join(' ').replace(/\*/g, '');
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); } catch { throw new Error('복사하지 못했습니다. 글을 직접 선택해 복사해 주세요'); }
+}
+const jobKind = (j) => (j.type === 'clip' ? (j.input.kind === 'viral' ? 'viral' : 'celeb') : j.type === 'reel' ? 'topic' : j.type === 'shorts' ? 'material' : null);
+function ShortBoard({ startJob, jobs, kind }) {
+  const [shortList, load] = useApiData('/api/shorts');
+  const [filter, setFilter] = useSticky('shorts-board-filter', 'todo');
+  const [open, setOpen] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [ytUrl, setYtUrl] = useState('');
+  const doneCount = jobs.filter((j) => ['clip', 'reel', 'shorts', 'render'].includes(j.type) && j.status !== 'running').length;
+  useEffect(() => { load(); }, [load, doneCount]);
+  const making = jobs.filter((j) => j.status === 'running' && jobKind(j) === kind);
+  const all = (shortList || []).filter((s) => s.script && kindOf(s.script) === kind);
+  const list = filter === 'todo' ? all.filter((s) => !s.script.uploaded) : all;
+  const cur = list.find((s) => s.dir === open) || list[0];
+  useEffect(() => { setYtUrl(cur?.script?.uploaded?.url || ''); }, [cur?.dir, cur?.script?.uploaded?.url]);
+  const saveUploaded = async (uploaded) => { await post('/api/shorts/uploaded', { dir: cur.dir, uploaded, url: ytUrl.trim() }); await load(); };
+  const sc = cur?.script;
+  const uploadText = sc ? `${(sc.description || '').trim()}\n\n${(sc.hashtags || []).join(' ')}`.trim() : '';
+  const fileUrl = (api, s) => `/api/shorts/${api}?dir=${encodeURIComponent(s.dir)}&v=${encodeURIComponent(s.video)}`;
+  return (
+    <section className="panel clip-board" data-tour="shorts-list">
       <div className="clip-list">
         <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
-          <b>편</b>
+          <b>만든 숏폼</b>
           <div className="segment" role="group" aria-label="보기">
-            {[['todo', '할 일'], ['all', '전체']].map(([id, name]) => <button key={id} type="button" className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>{name}</button>)}
+            {[['todo', '올릴 차례'], ['all', '전체']].map(([id, name]) => <button key={id} type="button" className={filter === id ? 'on' : ''} onClick={() => setFilter(id)}>{name}</button>)}
           </div>
         </div>
-        {making.map((j) => <div key={j.id} className="clip-item"><div className="clip-thumb" /><div><div className="title-cell">{j.input.topic}</div><span className="status running">만드는 중</span></div></div>)}
+        {making.map((j) => <div key={j.id} className="clip-item"><div className="clip-thumb" /><div><div className="title-cell">{j.input.topic || '숏폼'}</div><span className="status running">만드는 중</span></div></div>)}
         {list.map((s) => (
           <button key={s.dir} type="button" className={`clip-item${cur?.dir === s.dir ? ' on' : ''}`} onClick={() => setOpen(s.dir)}>
             {s.video ? <video className="clip-thumb" src={`${fileUrl('video', s)}#t=0.5`} preload="metadata" muted aria-hidden="true" /> : <div className="clip-thumb" />}
@@ -841,16 +861,16 @@ function Clip({ startJob, jobs }) {
               {s.script.uploaded ? <span className="status done"><Emoji name="check" size={16} />올림</span> : s.video ? <span className="clip-todo">올릴 차례</span> : <span className="muted">영상 없음</span>}</div>
           </button>
         ))}
-        {!making.length && !list.length && <Empty title={filter === 'todo' ? '올릴 차례인 편이 없습니다' : '아직 만든 편이 없습니다'}>위에서 인물·화제를 넣고 시작해 보세요.</Empty>}
+        {!making.length && !list.length && <Empty title={filter === 'todo' ? '올릴 차례인 편이 없습니다' : '아직 만든 편이 없습니다'}>위에서 만들기를 시작해 보세요.</Empty>}
       </div>
       {cur && <div className="clip-detail">
-        <h2 className="panel-title" style={{ marginBottom: 4 }}>{plainTitle(cur)}</h2>
+        <h2 className="panel-title" style={{ marginBottom: 4 }}>{plainTitle(cur) || cur.name}</h2>
         <div className="sub" style={{ marginBottom: 10 }}>{cur.name}</div>
         <div className="steps"><span className="done">1. 주제 고르기 끝</span><span className={cur.video ? 'done' : ''}>2. 자동 제작{cur.video ? ' 끝' : ''}</span><span className={sc.uploaded ? 'done' : 'now'}>3. 보고 올리기{sc.uploaded ? ' 끝' : ''}</span></div>
         <div className="split">
           {cur.video ? <video key={cur.video} className="preview" controls src={fileUrl('video', cur)} /> : <div className="note">영상이 아직 없습니다.</div>}
           <div>
-            <div className="note" style={{ marginBottom: 12 }}>완성본과 점검 그림을 보고 이상 없으면 유튜브에 올리고, 주소를 넣어 [올렸어요]를 누르세요. 자막·구간을 고치려면 [대본 고치기].</div>
+            <div className="note" style={{ marginBottom: 12 }}>완성본을 보고 이상 없으면 유튜브·인스타에 올리고, 주소를 넣어 [올렸어요]를 누르세요. 자막·장면을 고치려면 [대본 고치기].</div>
             <div className="row" style={{ marginBottom: 12 }}>
               <input value={ytUrl} onChange={(e) => setYtUrl(e.target.value)} placeholder="유튜브 주소(선택)" style={{ flex: '1 1 200px' }} aria-label="올린 유튜브 주소" />
               {sc.uploaded ? <Action run={() => saveUploaded(false)}>올리기 취소</Action> : <Action primary run={() => saveUploaded(true)}>올렸어요</Action>}
@@ -864,19 +884,90 @@ function Clip({ startJob, jobs }) {
               <Action run={async () => setEditing(true)}>대본 고치기</Action>
               <Action run={() => openFolder(cur.dir)}>폴더</Action>
             </div>
-            {cur.video && <div className="field"><span>점검 그림 (1초 간격)</span><img className="clip-check" src={fileUrl('check', cur)} alt="완성본 1초 간격 장면 모음" /></div>}
+            {cur.video && sc.layout === 'clip' && <div className="field"><span>점검 그림 (1초 간격)</span><img className="clip-check" src={fileUrl('check', cur)} alt="완성본 1초 간격 장면 모음" /></div>}
           </div>
         </div>
       </div>}
+      {editing && cur && <ShortDialog key={cur.dir} short={cur} onClose={() => setEditing(false)} startJob={startJob} />}
     </section>
-    {editing && cur && <ShortDialog key={cur.dir} short={cur} onClose={() => setEditing(false)} startJob={startJob} />}
-  </>;
+  );
 }
 
-const TITLE_FONTS = [['blackhan', '검은고딕', '굵고 각진 예능 자막'], ['dohyeon', '도현', '단정한 정보형'], ['jua', '주아', '둥글고 귀여운']];
+// 숏폼(만들기): 탭 4개 — ① 연예인 핫 ② 해외 재밌는 영상 ③ 주제·컨셉 ④ 내 사진·자료. 설계: docs/숏폼-통합-설계.md
+function ShortsHub({ config, reload, startJob, jobs, initialTab }) {
+  const [tab, setTab] = useSticky('shorts-tab', initialTab || 'celeb');
+  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      <style>{fontFaces}</style>
+      <Head title="숏폼" desc="유튜브 쇼츠·인스타 릴스용 세로 영상(1080×1920)을 만듭니다. 올리기는 직접 합니다" />
+      <div className="segment shorts-tabs" role="tablist" aria-label="숏폼 종류" style={{ marginBottom: 16 }}>
+        {Object.entries(SHORT_KINDS).map(([id, k], i) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{`${'①②③④'[i]} ${k.name}`}</button>)}
+      </div>
+      {tab === 'celeb' && <ClipForm startJob={startJob} kind="celeb" />}
+      {tab === 'viral' && <section className="panel"><Empty title="다음 단계에서 만듭니다">원작자 채널의 해외 재밌는 영상에 한국어 훅 제목·자막을 붙이는 탭입니다(설계 완료, 구현 중).</Empty></section>}
+      {tab === 'topic' && config && <Reel config={config} reload={reload} startJob={startJob} />}
+      {tab === 'material' && config && <Shorts config={config} reload={reload} startJob={startJob} />}
+      <ShortBoard startJob={startJob} jobs={jobs} kind={tab} />
+    </>
+  );
+}
+
+
 const VOICES = [['ko-KR-SunHiNeural', '선희 · 여'], ['ko-KR-InJoonNeural', '인준 · 남'], ['ko-KR-HyunsuMultilingualNeural', '현수 · 남']];
 // 글꼴 미리보기: 영상과 같은 제목 스타일(title-styles.mjs의 색·외곽선·띠·빛)
-const fontFaces = TITLE_FONTS.map(([id]) => `@font-face{font-family:"pv-${id}";src:url("/api/font?name=${id}")}`).join('');
+const fontFaces = Object.keys(TITLE_FONTS).map((id) => `@font-face{font-family:"pv-${id}";src:url("/api/font?name=${id}")}`).join('');
+// 클립형(①②) 위 검은 띠 미리보기
+function ClipBandSample({ style, font }) {
+  const box = (bg) => (bg ? { background: bg, padding: '1px 8px 3px', borderRadius: 4 } : {});
+  const em = { fontStyle: 'normal', color: style.em };
+  return (
+    <div className="fontsample clipband" style={{ fontFamily: `"pv-${font}"` }}>
+      <div><span style={{ color: style.t1, ...box(style.t1Box) }}>내향인이라면</span></div>
+      <div><span style={{ color: style.t2, ...box(style.t2Box) }}>피하고 싶은 <em style={em}>상황</em></span></div>
+    </div>
+  );
+}
+// 탭마다 글꼴 + 색 스타일 고르기. value = { font, clipStyle } (①②) 또는 { font, titleStyle } (③④)
+function LookPick({ kind, value, onChange }) {
+  const clip = kind === 'celeb' || kind === 'viral';
+  const set = (patch) => onChange({ ...value, ...patch });
+  return (
+    <>
+      <div className="field"><span>글꼴</span>
+        <div className="fontcards" role="radiogroup" aria-label="글꼴">
+          {Object.entries(TITLE_FONTS).map(([id, f]) => (
+            <button key={id} type="button" role="radio" aria-checked={value.font === id} className={`fontcard${value.font === id ? ' on' : ''}`} onClick={() => set({ font: id })}>
+              <div className="fontsample" style={{ fontFamily: `"pv-${id}"` }}><div>강릉 커피축제</div><div className="y">이번 주말</div></div>
+              <div className="fontname"><b>{f.name}</b> <span className="muted">{f.desc}</span></div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field"><span>제목 색</span>
+        <div className="fontcards" role="radiogroup" aria-label="제목 색">
+          {clip ? Object.entries(CLIP_STYLES).map(([id, st]) => (
+            <button key={id} type="button" role="radio" aria-checked={value.clipStyle === id} className={`fontcard${value.clipStyle === id ? ' on' : ''}`} onClick={() => set({ clipStyle: id })}>
+              <ClipBandSample style={st} font={value.font} />
+              <div className="fontname"><b>{st.name}</b> <span className="muted">{st.desc}</span></div>
+            </button>
+          )) : <>
+            <button type="button" role="radio" aria-checked={value.titleStyle === 'auto'} className={`fontcard${value.titleStyle === 'auto' ? ' on' : ''}`} onClick={() => set({ titleStyle: 'auto' })}>
+              <div className="fontsample auto">자동</div>
+              <div className="fontname"><b>자동</b> <span className="muted">내용·분위기에 맞게 AI가 고름</span></div>
+            </button>
+            {Object.entries(TITLE_STYLES).map(([id, st]) => (
+              <button key={id} type="button" role="radio" aria-checked={value.titleStyle === id} className={`fontcard${value.titleStyle === id ? ' on' : ''}`} onClick={() => set({ titleStyle: id })}>
+                <TitleSample style={{ ...st, font: value.font }} />
+                <div className="fontname"><b>{st.name}</b> <span className="muted">{st.desc}</span></div>
+              </button>
+            ))}
+          </>}
+        </div>
+      </div>
+    </>
+  );
+}
 function TitleSample({ style }) {
   const line2 = { color: style.line2, WebkitTextStroke: `6px ${style.stroke}` };
   if (style.line2Box) Object.assign(line2, { display: 'inline-block', marginTop: 4, padding: '0 10px 3px', borderRadius: 8, background: style.line2Box, border: `3px solid ${style.stroke}`, WebkitTextStroke: 0 });
@@ -973,29 +1064,24 @@ function ShortDialog({ short, onClose, startJob }) {
   );
 }
 
-function Shorts({ config, reload, startJob, jobs }) {
-  const [form, setForm] = useState({ topic: '', notes: '', titleStyle: 'auto' });
+function Shorts({ config, reload, startJob }) {
+  const [length, setLength] = useSticky('shorts-length-material', 'normal');
+  const [form, setForm] = useState({ topic: '', notes: '' });
+  const [look, setLook] = useSticky('shorts-look-material', KIND_DEFAULTS.material);
   const [engine, setEngine] = useState(config.engine || 'codex');
   const [note, setNote] = useState('');
-  const [shortList, load] = useApiData('/api/shorts');
-  const list = shortList || [];
-  const [open, setOpen] = useState(null);
   const [files, setFiles] = useState([]);
-  const doneCount = jobs.filter((j) => ['shorts', 'render'].includes(j.type) && j.status !== 'running').length;
-  useEffect(() => { load(); }, [load, doneCount]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const current = list.find((s) => s.dir === open);
 
   const submit = async () => {
     if (!form.topic.trim() && !files.length) throw new Error('주제나 자료 중 하나는 있어야 합니다');
     const paths = await uploadAll(files, setNote);
-    await startJob({ type: 'shorts', ...form, topic: form.topic.trim(), engine, files: paths });
+    await startJob({ type: 'shorts', ...form, topic: form.topic.trim(), engine, length, titleFont: look.font, titleStyle: look.titleStyle, files: paths }, { stay: true });
+    setForm((f) => ({ ...f, topic: '', notes: '' })); setFiles([]);
   };
 
   return (
     <>
-      <style>{fontFaces}</style>
-      <Head title="숏폼 만들기" desc="자료를 주면 대본·음성·자막·효과를 붙여 세로 영상(1080×1920)으로 만듭니다" />
       <section className="panel">
         <div data-tour="shorts-topic">
         <label className="field"><span>무엇에 대한 영상인가요?</span>
@@ -1006,40 +1092,13 @@ function Shorts({ config, reload, startJob, jobs }) {
         </label>
         <div className="field"><span>자료</span><FilePick files={files} setFiles={setFiles} accept="image/*,video/*,.pdf" hint="사진·영상·PDF — 장면 배경과 내용으로 씁니다" /></div>
         </div>
-        <div className="field"><span>제목 스타일</span>
-          <div className="fontcards" data-tour="shorts-fonts" role="radiogroup" aria-label="제목 스타일">
-            <button type="button" role="radio" aria-checked={form.titleStyle === 'auto'} className={`fontcard${form.titleStyle === 'auto' ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, titleStyle: 'auto' }))}>
-              <div className="fontsample auto">자동</div>
-              <div className="fontname"><b>자동</b> <span className="muted">내용·분위기에 맞게 AI가 고름</span></div>
-            </button>
-            {Object.entries(TITLE_STYLES).map(([id, style]) => (
-              <button key={id} type="button" role="radio" aria-checked={form.titleStyle === id} className={`fontcard${form.titleStyle === id ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, titleStyle: id }))}>
-                <TitleSample style={style} />
-                <div className="fontname"><b>{style.name}</b> <span className="muted">{style.desc}</span></div>
-              </button>
-            ))}
-          </div>
-        </div>
+        <LookPick kind="material" value={look} onChange={setLook} />
+        <LengthPick kind="material" value={length} onChange={setLength} />
         <div className="field"><span>AI 엔진</span><Engine value={engine} onChange={setEngine} /></div>
         <VoiceSettings config={config} reload={reload} />
         <div className="row" style={{ marginTop: 18 }}><Action primary big run={submit}>숏폼 만들기 시작</Action><span className="muted">{note}</span></div>
       </section>
 
-      <section className="panel" data-tour="shorts-list">
-        <h2 className="panel-title">만든 숏폼 <span className="muted" style={{ fontWeight: 600 }}>{list.length}개 · 누르면 미리보기와 대본이 열립니다</span></h2>
-        {list.length ? (
-          <table>
-            <thead><tr><th>제목</th><th style={{ width: 160 }}>영상</th></tr></thead>
-            <tbody>{list.map((s) => (
-              <tr key={s.dir} className="click" onClick={() => setOpen(s.dir)}>
-                <td><div className="title-cell">{(s.script?.title || []).join(' ').replace(/\*/g, '') || '(대본 없음)'}</div><div className="sub">{s.name}</div></td>
-                <td>{s.video ? <span className="status done"><Emoji name="check" size={18} />{when(s.video)}</span> : <span className="muted">아직 없음</span>}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        ) : shortList ? <Empty title="아직 만든 숏폼이 없습니다">위에서 자료를 넣고 시작해 보세요.</Empty> : <Empty title="불러오는 중" />}
-      </section>
-      {current && <ShortDialog key={current.dir} short={current} onClose={() => setOpen(null)} startJob={startJob} />}
     </>
   );
 }

@@ -32,14 +32,16 @@ export function pickTargets(store, { myBlogId, buddyIds, now = Date.now(), limit
     .filter((it) => ['drafted', 'sent'].includes(it.status) && now - Date.parse(it.sentAt || it.draftedAt || it.foundAt) < LIMITS.sameAuthorDays * DAY)
     .map((it) => it.author.blogId));
   const out = [];
+  const pickedNow = new Set();
   for (const it of Object.values(store.items).sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')))) {
     if (out.length >= limit) break;
     if (it.status !== 'new') continue;
     const id = it.author.blogId;
     if (id === myBlogId) { it.status = 'skipped'; it.reason = '내 블로그'; continue; }
     if (!buddies.has(id)) { it.status = 'skipped'; it.reason = '서로이웃 아님'; continue; }
+    if (pickedNow.has(id)) { it.status = 'skipped'; it.reason = '같은 이웃의 다른 댓글(한 번만 답방)'; continue; }
     if (recentAuthors.has(id)) { it.status = 'skipped'; it.reason = `최근 ${LIMITS.sameAuthorDays}일 안에 답방함`; continue; }
-    recentAuthors.add(id);
+    pickedNow.add(id);
     out.push(it);
   }
   return out;

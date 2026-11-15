@@ -27,7 +27,12 @@ const BOX = { y: 600, w: W - 40, h: 960 };
 export const FONT_CHOICES = {
   blackhan: { file: 'BlackHanSans-Regular.ttf', name: '검은고딕' },
   dohyeon: { file: 'DoHyeon-Regular.ttf', name: '도현' },
-  jua: { file: 'Jua-Regular.ttf', name: '주아' }
+  jua: { file: 'Jua-Regular.ttf', name: '주아' },
+  // 우리 글꼴 세트(눈누 확인, 재배포 가능) — assets/fonts/licenses/README.md
+  gmarket: { file: 'GmarketSansTTFBold.ttf', name: 'G마켓 산스' },
+  ssurround: { file: 'Cafe24Ssurround-v2.0.ttf', name: '카페24 써라운드' },
+  maruburi: { file: 'MaruBuri-Bold.ttf', name: '마루 부리' },
+  freesentation: { file: 'Freesentation-8ExtraBold.ttf', name: '프리젠테이션' }
 };
 
 // 감정. Edge는 진짜 감정 표현이 없어(한국어 목소리 스타일 없음) 높낮이·속도·음량 + 음향 효과로 흉내 낸다.

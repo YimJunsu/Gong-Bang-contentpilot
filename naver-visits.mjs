@@ -3,54 +3,49 @@
 // (로그인 상태 유지가 꺼져 있으면 서버를 다시 켤 때 로그인이 풀리기 때문)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// JSON 안에서 조건에 맞는 객체를 모두 찾는다
-function walk(value, test, out = []) {
-  if (Array.isArray(value)) value.forEach((v) => walk(v, test, out));
-  else if (value && typeof value === 'object') { if (test(value)) out.push(value); Object.values(value).forEach((v) => walk(v, test, out)); }
-  return out;
-}
-const firstKey = (o, keys) => keys.map((k) => o[k]).find((v) => v != null && v !== '');
-
-// ---- 내소식의 댓글 알림 → [{ id, at, author:{name, blogId}, comment, myPost:{title, logNo} }] ----
-// 화면이 받는 JSON을 가로채 읽는다(링크가 전부 '#'라 화면 글자만으로는 작성자 블로그를 알 수 없다)
-export async function myNewsComments(page) {
-  const bodies = [];
-  page.on('response', async (r) => {
-    if (!/json/.test(r.headers()['content-type'] || '') || !/news|noti|alarm|activity/i.test(r.url())) return;
-    const json = await r.json().catch(() => null);
-    if (json) bodies.push({ url: r.url(), json });
-  });
-  await page.goto('https://m.blog.naver.com/News.naver', { waitUntil: 'networkidle', timeout: 45_000 }).catch(() => {});
-  await sleep(1500);
-  const items = walk(bodies.map((b) => b.json), (o) => {
-    const kind = String(firstKey(o, ['type', 'newsType', 'category', 'activityType', 'noticeType']) || '');
-    const author = firstKey(o, ['senderBlogId', 'actorBlogId', 'fromBlogId', 'writerBlogId', 'blogId']);
-    const text = firstKey(o, ['contents', 'content', 'commentContents', 'message', 'text']);
-    return /comment/i.test(kind) && !/reply/i.test(kind) && author && text;
-  });
-  return items.map((o) => ({
-    id: String(firstKey(o, ['commentNo', 'commentId', 'newsNo', 'id', 'seq']) || `${firstKey(o, ['senderBlogId', 'actorBlogId', 'fromBlogId', 'writerBlogId', 'blogId'])}-${firstKey(o, ['addDate', 'regDate', 'createdAt', 'date'])}`),
-    at: String(firstKey(o, ['addDate', 'regDate', 'createdAt', 'date']) || ''),
-    author: { name: String(firstKey(o, ['senderNickName', 'actorNickName', 'nickName', 'nickname', 'name']) || ''), blogId: String(firstKey(o, ['senderBlogId', 'actorBlogId', 'fromBlogId', 'writerBlogId', 'blogId'])) },
-    comment: String(firstKey(o, ['contents', 'content', 'commentContents', 'message', 'text']) || '').slice(0, 300),
-    myPost: { title: String(firstKey(o, ['postTitle', 'title', 'logTitle']) || ''), logNo: String(firstKey(o, ['logNo', 'postNo']) || '') }
-  }));
+// ---- 내소식의 댓글 알림 → [{ id, at, author:{name, blogId}, comment, myPost:{title, url} }] ----
+// 내소식 화면이 부르는 news-list API를 같은 로그인으로 직접 부른다(2026-11-15 실측: items[].commcastCategoryType
+// = BLOG_COMMENT(내 글 댓글) / BLOG_COMMENT_REPLY(내 댓글의 답글) / BLOG_SYMPATHY / BUDDY_*, writerId = 작성자 블로그 아이디)
+export async function myNewsComments(page, blogId) {
+  await page.goto('https://m.blog.naver.com/News.naver', { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
+  // 로그인이 안 돼 있으면 내소식 대신 탐색 화면으로 넘어간다
+  if (!/News\.naver/.test(page.url())) throw new Error('네이버 로그인이 필요합니다. 설정 → 계정 관리에서 다시 로그인해 주세요');
+  // 블로그 아이디를 안 받았으면 화면의 로그인 정보(current-user)에서 읽는다
+  if (!blogId) blogId = await page.evaluate(async () => (await (await fetch('/api/current-user', { credentials: 'include' })).json())?.result?.userId || '');
+  if (!blogId) throw new Error('내 블로그 아이디를 알 수 없습니다');
+  const items = await page.evaluate(async (id) => {
+    const r = await fetch(`/api/blogs/${id}/news-list?isMrBlogView=false&isUnread=false`, { credentials: 'include' });
+    if (!r.ok) throw new Error(`내소식 목록을 못 읽음(${r.status})`);
+    return (await r.json())?.result?.newsListView?.items || [];
+  }, blogId);
+  return items.filter((i) => i.commcastCategoryType === 'BLOG_COMMENT' && i.writerId && i.writerId !== blogId)
+    .map((i) => ({
+      id: String(i.commentNo ?? i.createKeyString),
+      at: new Date(i.createTime).toISOString(),
+      author: { name: i.writerNickname || i.writerId, blogId: i.writerId },
+      comment: String(i.content || '').slice(0, 300),
+      myPost: { title: i.title || '', url: String(i.url || '').replace(/^http:/, 'https:') }
+    }));
 }
 
-// ---- 서로이웃 블로그 아이디 목록 (이웃 관리 화면, 여러 쪽) ----
+// ---- 서로이웃 블로그 아이디 목록 (이웃 관리 화면, 쪽마다 currentPage) ----
+// 줄 구조(2026-11-15 실측): <td class="type"><span class="both">서로이웃</span> … <a href="https://blog.naver.com/아이디">
 export async function mutualBuddies(page, blogId) {
   const ids = new Set();
-  for (let p = 1; p <= 30; p += 1) {
+  let prev = '';
+  for (let p = 1; p <= 40; p += 1) {
     await page.goto(`https://admin.blog.naver.com/BuddyListManage.naver?blogId=${blogId}&currentPage=${p}`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    await sleep(800);
-    const rows = await page.evaluate(() => [...document.querySelectorAll('tr')].filter((tr) => /서로이웃/.test(tr.innerText) && !/이웃전체/.test(tr.innerText))
-      .map((tr) => [...tr.querySelectorAll('a[href]')].map((a) => a.href).join(' ')));
-    const before = ids.size;
-    for (const hrefs of rows) {
-      const m = hrefs.match(/blog\.naver\.com\/(?:PostList\.naver\?blogId=)?([\w-]+)/) || hrefs.match(/[?&]blogId=([\w-]+)/);
+    const rows = await page.evaluate(() => [...document.querySelectorAll('tr')].map((tr) => ({
+      both: Boolean(tr.querySelector('td.type .both')),
+      href: tr.querySelector('td.buddy a[href*="blog.naver.com/"]')?.href || ''
+    })).filter((r) => r.href));
+    const key = rows.map((r) => r.href).join(' ');
+    if (!rows.length || key === prev) break; // 마지막 쪽을 지났다
+    prev = key;
+    for (const r of rows) {
+      const m = r.both && r.href.match(/blog\.naver\.com\/([\w-]+)/);
       if (m && m[1] !== blogId) ids.add(m[1]);
     }
-    if (ids.size === before) break; // 더 쪽이 없다
   }
   return [...ids];
 }
@@ -86,12 +81,20 @@ export async function probe(page, { blogId, postUrl } = {}) {
   await page.goto('https://m.blog.naver.com/News.naver', { waitUntil: 'networkidle', timeout: 45_000 }).catch(() => {});
   await sleep(2000);
   out.newsUrl = page.url();
+  out.newsApi = await page.evaluate(async (id) => {
+    const r = await fetch(`/api/blogs/${id}/news-list?isMrBlogView=false&isUnread=false`, { credentials: 'include' });
+    const j = await r.json();
+    const items = j?.result?.newsListView?.items || [];
+    return { keys: Object.keys(j?.result?.newsListView || {}), types: [...new Set(items.map((i) => i.commcastCategoryType))], comment: items.filter((i) => /COMMENT|REPLY/.test(i.commcastCategoryType)).slice(0, 3), total: items.length };
+  }, blogId);
   out.newsDom = await page.evaluate(() => [...document.querySelectorAll('li')].filter((li) => /댓글을 남겼습니다/.test(li.innerText)).slice(0, 3).map((li) => li.outerHTML.slice(0, 2500)));
   page.removeAllListeners('response');
   await page.goto(`https://admin.blog.naver.com/BuddyListManage.naver?blogId=${blogId}`, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => {});
   await sleep(1500);
   out.buddy = await page.evaluate(() => ({
     row: [...document.querySelectorAll('tr')].find((tr) => /서로이웃/.test(tr.innerText) && !/이웃전체/.test(tr.innerText))?.outerHTML.slice(0, 3000),
+    goPage: typeof window.goPage === 'function' ? window.goPage.toString().slice(0, 800) : null,
+    forms: [...document.forms].map((f) => ({ name: f.name, action: f.action, inputs: [...f.elements].map((e) => `${e.name}=${e.value}`).slice(0, 15) })),
     paging: [...document.querySelectorAll('a')].filter((a) => /^\s*\d+\s*$/.test(a.innerText)).slice(0, 6).map((a) => ({ text: a.innerText.trim(), href: a.getAttribute('href'), onclick: a.getAttribute('onclick') }))
   }));
   if (postUrl) {

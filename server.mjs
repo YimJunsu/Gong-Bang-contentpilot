@@ -8,7 +8,10 @@ import { runAI, lastJson } from './ai.mjs';
 import * as naver from './naver.mjs';
 import next from 'next';
 import { renderShort, FONT_CHOICES } from './video.mjs';
-import { TITLE_STYLES } from './title-styles.mjs';
+import { TITLE_STYLES, CLIP_STYLES } from './title-styles.mjs';
+// 사용자가 고른 글꼴·스타일만 남긴다(모르는 값은 버리고 탭 기본값을 쓴다)
+const fontPick = (input) => (FONT_CHOICES[input.titleFont] ? { titleFont: input.titleFont } : {});
+import { lengthRange } from './shorts-kinds.mjs';
 import { fetchShortents, updateStore, similarPost } from './shortents.mjs';
 import { notify } from './notify.mjs';
 import * as visits from './visits.mjs';
@@ -269,7 +272,8 @@ const safeName = (v) => String(v).replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '
 const inShorts = (dir) => { const rel = path.relative(SHORTS(), path.resolve(dir)); return rel && !rel.startsWith('..') && !path.isAbsolute(rel); };
 const ttsOptions = () => ({ ...(config.tts || {}), chromePath: config.chromePath });
 
-function shortsPrompt({ topic, notes, files, titleStyle }) {
+function shortsPrompt({ topic, notes, files, titleStyle, length }) {
+  const [minSec, maxSec] = lengthRange('material', length);
   return [
     '세로형(9:16) 정보 숏폼 영상 대본을 만든다. 결과는 이 폴더의 script.json 파일 하나다.',
     topic ? `주제: ${topic}` : '주제: 자료를 보고 정하라',
@@ -278,7 +282,7 @@ function shortsPrompt({ topic, notes, files, titleStyle }) {
     '',
     'script.json 형식:',
     '{"title":["윗줄(10자 이내)","아랫줄(12자 이내, *강조*)"],"badge":"짧은 라벨 또는 빈 문자열","scenes":[{"media":"media/파일명 또는 null","stamp":"도장 문구 또는 빈 문자열","lines":[{"text":"읽을 문장, *강조 구절*","tone":"normal"}]}],"description":"업로드 설명 2~3줄","hashtags":["#태그"]}',
-    '- 장면 4~8개, 전체 낭독 30~50초. 첫 장면은 3초 안에 핵심(금액·날짜·대상)을 말하는 훅.',
+    `- 장면 4~8개, 전체 낭독 ${minSec}~${maxSec}초. 첫 장면은 3초 안에 핵심(금액·날짜·대상)을 말하는 훅.`,
     '  훅 유형 중 하나를 고른다: 결과 먼저("월 14만 원에 산다고?"), 오해 깨기("맞벌이도 된다는 거 아셨어요?"), 타깃 콕("자취생이면 이거 꼭"), 손해 경고("이거 모르면 10만 원 날려요"). 주제를 나열하는 첫 문장("오늘은 ~ 알려드릴게요")은 쓰지 않는다. 첫 장면 하나만 봐도 무슨 영상인지 알 수 있어야 한다.',
     '  훅에서 꺼낸 숫자·주장은 다음 장면에서 바로 풀고, 자료에 없는 내용으로 과장하지 않는다.',
     '- lines는 한 장면 1~3문장, 구어체 한국어. 숫자는 읽기 쉽게(14만 6,700원). 마지막 장면은 저장·확인 유도.',
@@ -311,10 +315,11 @@ const jobTypes = {
       files.push(name);
     }
     log('Codex로 대본과 장면 설명 작성 중');
-    const output = await runAI(config, 'codex', reelPrompt(job.input), { cwd: dir, log });
+    const output = await runAI(config, 'codex', reelPrompt({ ...job.input, seconds: lengthRange('topic', job.input.length) }), { cwd: dir, log });
     let script = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null'));
     if (!script) script = lastJson(output);
     validateReel(script, job.input.narration || '');
+    Object.assign(script, { kind: 'topic', ...fontPick(job.input), ...(TITLE_STYLES[job.input.titleStyle] ? { titleStyle: job.input.titleStyle } : {}) });
     if (files.length) assignMedia(script.scenes, files);
     else script.scenes.forEach((scene, i) => { scene.media = `media/scene-${String(i + 1).padStart(2, '0')}.png`; });
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
@@ -349,6 +354,7 @@ const jobTypes = {
     if (!script) { script = lastJson(output); if (script) await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2)); }
     if (!script?.scenes?.length) throw new Error('script.json을 만들지 못했습니다');
     // 제목 스타일: 고른 것이 있으면 그것, '자동'이면 AI가 대본에 고른 것(없거나 틀리면 기본). 다시 렌더링해도 같게 script.json에 남긴다
+    Object.assign(script, { kind: 'material', ...fontPick(job.input) });
     if (TITLE_STYLES[job.input.titleStyle]) script.titleStyle = job.input.titleStyle;
     else if (!TITLE_STYLES[script.titleStyle]) delete script.titleStyle;
     if (job.input.font && !script.titleStyle) script.font = job.input.font;
@@ -397,10 +403,11 @@ const jobTypes = {
     }
     log(`${engine}로 구간·자막 고르는 중`);
     await fs.rm(path.join(dir, 'script.json'), { force: true });
-    const output = await runAI(config, engine, scriptPrompt(job.input, sources), { cwd: dir, log });
+    const kind = job.input.kind === 'viral' ? 'viral' : 'celeb';
+    const output = await runAI(config, engine, scriptPrompt({ ...job.input, seconds: lengthRange(kind, job.input.length) }, sources), { cwd: dir, log });
     const raw = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null')) || lastJson(output);
     const kept = sources.map(({ n, url, title, channel, duration, file }) => ({ n, url, title, channel, duration, file }));
-    const script = { ...validateClip(raw, kept), sources: kept, mute: Boolean(job.input.mute) };
+    const script = { ...validateClip(raw, kept), kind, ...fontPick(job.input), ...(CLIP_STYLES[job.input.clipStyle] ? { clipStyle: job.input.clipStyle } : {}), sources: kept, mute: Boolean(job.input.mute) };
     script.description = withCredits(script.description, kept);
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
     log(`구간 ${script.scenes.length}개 → 렌더링`);
@@ -485,12 +492,14 @@ const jobTypes = {
     const account = naverAccount(job.input.account);
     const store = readJson('visits.json', visits.emptyStore());
     log(`내소식에서 새 댓글 읽는 중 · ${account.name}`);
-    const comments = await onPage(account.profile, 'myNewsComments');
+    const comments = await onPage(account.profile, 'myNewsComments', account.blogId);
     log(`  댓글 ${comments.length}개 중 새 댓글 ${visits.mergeComments(store, comments)}개`);
     // 서로이웃 목록은 하루 한 번만 새로 읽는다(이웃이 많으면 여러 쪽이라 오래 걸린다)
     if (!store.buddies.at || Date.now() - Date.parse(store.buddies.at) > 86400_000) {
       log('서로이웃 목록 읽는 중');
-      store.buddies = { at: new Date().toISOString(), ids: await onPage(account.profile, 'mutualBuddies', account.blogId) };
+      const ids = await onPage(account.profile, 'mutualBuddies', account.blogId);
+      // 0명이면 화면을 못 읽은 것일 수 있어 저장해 두지 않는다(다음에 다시 읽게)
+      store.buddies = ids.length ? { at: new Date().toISOString(), ids } : { at: null, ids: [] };
     }
     log(`  서로이웃 ${store.buddies.ids.length}명`);
     const targets = visits.pickTargets(store, { myBlogId: account.blogId, buddyIds: store.buddies.ids });
