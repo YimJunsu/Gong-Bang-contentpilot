@@ -1146,7 +1146,7 @@ const routes = {
 // 화면은 Next(React). /api만 여기서 처리하고 나머지는 Next에 넘긴다 — 포트 하나, 작업 상태는 이 프로세스에 유지.
 const dev = process.argv.includes('--dev');
 const network = networkSettings(config);
-const ui = next({ dev, dir: HERE, hostname: network.hostname, port: config.port, conf: { allowedDevOrigins: network.allowedDevOrigins } });
+const ui = next({ dev, dir: HERE, hostname: network.hostname, port: config.port, conf: { allowedDevOrigins: network.allowedDevOrigins, experimental: { agentUpgrade: 'security' } } });
 const uiHandle = ui.getRequestHandler();
 await ui.prepare();
 
