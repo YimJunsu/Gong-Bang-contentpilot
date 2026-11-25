@@ -11,7 +11,7 @@ import { renderShort, FONT_CHOICES } from './video.mjs';
 import { TITLE_STYLES, CLIP_STYLES } from './title-styles.mjs';
 // 사용자가 고른 글꼴·스타일만 남긴다(모르는 값은 버리고 탭 기본값을 쓴다)
 const fontPick = (input) => (FONT_CHOICES[input.titleFont] ? { titleFont: input.titleFont } : {});
-import { lengthRange, SHORT_FOLDERS, UPLOAD_RULE, UPLOAD_TXT, uploadText, uploadTitle } from './shorts-kinds.mjs';
+import { lengthRange, lookFor, SHORT_FOLDERS, UPLOAD_RULE, UPLOAD_TXT, uploadText, uploadTitle } from './shorts-kinds.mjs';
 import { fetchShortents, updateStore, similarPost } from './shortents.mjs';
 import { notify } from './notify.mjs';
 import * as visits from './visits.mjs';
@@ -19,13 +19,14 @@ import { pathToFileURL } from 'node:url';
 // 네이버 화면을 다루는 답방 코드는 부를 때마다 새로 읽는다(고쳐도 서버 재시작 없이 반영 — 재시작하면 로그인이 풀릴 수 있어서)
 const nvVisits = () => import(`${pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'naver-visits.mjs')).href}?v=${Date.now()}`);
 const onPage = async (profile, name, ...args) => { const mod = await nvVisits(); return naver.usePage(config, profile, (page) => mod[name](page, ...args)); };
-import { reelPrompt, validateReel, validateImages, assignMedia, normalizeTopics } from './reel.mjs';
+import { reelPrompt, ssulPrompt, validateReel, validateImages, assignMedia, normalizeTopics } from './reel.mjs';
 import { createCampaignService } from './campaigns.mjs';
-import { searchVideos, searchUrl, videoInfo, download, contactSheets, pickPrompt, pickIds, scriptPrompt, validateClip, notCompilation, withCredits, renderClip, youtubeUrl, transcript } from './clip.mjs';
+import { searchVideos, searchUrl, videoInfo, download, contactSheets, pickPrompt, pickIds, scriptPrompt, validateClip, notCompilation, withCredits, renderClip, youtubeUrl, transcript, extract, EXTRACT_FORMATS } from './clip.mjs';
 import { networkSettings } from './network.mjs';
 import * as character from './character.mjs';
 import { renderCharacter } from './character-render.mjs';
-import { AUTO_CATS, trendingApi, pickFresh, weekSearchUrl } from './autoshorts.mjs';
+import { AUTO_CATS, trendingApi, pickFresh, weekSearchUrl, monthSearchUrl, yearSearchUrl } from './autoshorts.mjs';
+import { googleTrends, celebKeywords, celebPickPrompt, normalizeCelebPicks, isThemeTopic, themeQueriesPrompt } from './celebtrend.mjs';
 import { createReadStream } from 'node:fs';
 import { spawn } from 'node:child_process';
 
@@ -126,7 +127,7 @@ function startJob(type, input, work) {
 }
 
 // 끝난 작업을 Windows 알림으로 알린다 (설정에서 끌 수 있다). 누르면 작업 로그가 열린다
-const JOB_NAMES = { character: '캐릭터 숏폼', autoshorts: '쇼츠 자동화', write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비' };
+const JOB_NAMES = { extract: 'mp3·mp4 추출', character: '캐릭터 숏폼', autoshorts: '쇼츠 자동화', write: '글 생성', draft: '임시저장', discover: '수집·추천', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비' };
 function announce(job) {
   if (config.notify === false || !JOB_NAMES[job.type]) return;
   const what = job.input.topic || path.basename(job.input.postDir || job.input.dir || '') || '';
@@ -324,9 +325,99 @@ function shortsPrompt({ topic, notes, files, titleStyle, length }) {
   ].filter((l) => l !== '').join('\n');
 }
 
+// mp3·mp4 추출기: data/downloads/<작업 id>/영상제목.mp3|mp4. 한 편 = 폴더 하나(휴지통으로 지우기 쉽게)
+const DOWNLOADS = path.join(DATA, 'downloads');
+const extractDir = (id) => (/^[\w-]+$/.test(String(id || '')) ? path.join(DOWNLOADS, id) : null);
+async function extractList() {
+  const names = await fs.readdir(DOWNLOADS).catch(() => []);
+  const list = [];
+  for (const id of names) {
+    const meta = await fs.readFile(path.join(DOWNLOADS, id, 'meta.json'), 'utf8').then(JSON.parse).catch(() => null);
+    if (!meta?.file) continue;
+    const stat = await fs.stat(path.join(DOWNLOADS, id, meta.file)).catch(() => null);
+    if (stat) list.push({ id, ...meta, size: stat.size });
+  }
+  return list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+const MEDIA_TYPE = { mp3: 'audio/mpeg', mp4: 'video/mp4' };
+
+// 빈 칸으로 만들 때 AI에게 주는 요즘 화제: 저장된 핫 키워드(주제별 위 3개) + 숏텐츠 제목
+function trendHints() {
+  const hot = readJson('hotkeywords.json', {});
+  const short = readJson('shortents.json', {});
+  const keywords = (hot.categories || []).flatMap((c) => (c.items || []).slice(0, 3).map((k) => `${c.category}: ${k.query}`)).slice(0, 60);
+  const shortTitles = (short.current || []).map((id) => short.items?.[id]?.title).filter(Boolean).slice(0, 30);
+  return [...keywords, ...shortTitles];
+}
+// 요즘 뜨는 새 영상 찾기: 인기 차트(키 있으면) → 이번 주 업로드 검색 → 일반 검색. 연예인·해외 빈 칸 만들기와 자동 만들기가 같이 쓴다
+async function findFresh(cat, per, used, log) {
+  let list = [];
+  if (config.youtubeKey) {
+    try { list = await trendingApi(config.youtubeKey, cat); log(`[${cat.name}] 유튜브 인기 차트 ${list.length}개`); } catch (e) { log(`[${cat.name}] 인기 차트를 못 받음(${e.message}) → 검색으로`); }
+  }
+  let picks = pickFresh(list, cat, used, per);
+  // ②는 조회수가 모자라면 이번 달 → 올해로 넓힌다(전체 기간 검색은 옛 뮤직비디오가 맨 위에 온다)
+  const spans = [['이번 주', weekSearchUrl], ...(cat.kind === 'viral' ? [['이번 달', monthSearchUrl], ['올해', yearSearchUrl]] : [])];
+  for (const [name, url] of spans) {
+    if (picks.length >= per) break;
+    list = [...list, ...(await searchUrl(config, url(cat.query), 40).catch((e) => { log(`${name} 검색 실패: ${e.message}`); return []; }))];
+    picks = pickFresh(list, cat, used, per);
+  }
+  if (picks.length < per) {
+    list = [...list, ...(await searchVideos(config, cat.query, 30).catch(() => []))];
+    picks = pickFresh(list, cat, used, per);
+  }
+  return picks;
+}
+// ① 연예인 빈 칸: 급상승 연예·방송 화제 → AI가 검색어로 → 이번 주(없으면 이번 달·일반) 공식(인증) 채널 영상 후보
+async function hotCeleb(engine, used, log) {
+  const naverKw = celebKeywords(readJson('hotkeywords.json', {}));
+  const google = await googleTrends().catch((e) => { log(`구글 급상승 검색어를 못 받음: ${e.message}`); return []; });
+  log(`급상승 화제: 네이버 연예·방송 ${naverKw.length}개 · 구글 ${google.length}개`);
+  if (!naverKw.length && !google.length) return null;
+  const avoid = jobs.filter((j) => j.type === 'clip' && j.input?.kind !== 'viral' && j.input?.hot).map((j) => j.input.topic).slice(0, 20);
+  const picks = normalizeCelebPicks(lastJson(await runAI(config, engine, celebPickPrompt(naverKw, google, avoid), { cwd: DATA, log })));
+  const ok = (v) => v?.id && v.verified && !used.has(v.id) && v.duration >= 15 && v.duration <= 15 * 60;
+  for (const p of picks) {
+    log(`화제 후보: ${p.query} — ${p.why}`);
+    let found = [];
+    // 섞어 쓰기(2026-11-22 레퍼런스): 같은 인물의 예능·인터뷰·무대를 따로 찾아 AI가 이야기 순서로 2~3개 고르게 한다
+    const name = p.name && p.name !== p.query ? p.name : '';
+    const gets = [() => searchUrl(config, weekSearchUrl(p.query), 25), () => searchUrl(config, monthSearchUrl(p.query), 25),
+      ...(name ? ['예능', '인터뷰', '무대'].map((w) => () => searchUrl(config, monthSearchUrl(`${name} ${w}`), 15)) : []),
+      () => searchVideos(config, p.query, 20)];
+    for (const get of gets) {
+      found = [...found, ...(await get().catch(() => [])).filter(ok)];
+      found = found.filter((v, i) => found.findIndex((x) => x.id === v.id) === i);
+      if (found.length >= 12) break;
+    }
+    if (found.length) return { topic: p.query, why: p.why, found: found.slice(0, 20) };
+  }
+  return null;
+}
+// 한 번 쓴 영상은 다시 쓰지 않는다(data/autoshorts.json)
+const markUsed = (v) => { const store = readJson('autoshorts.json', { used: {} }); store.used = store.used || {}; store.used[v.id] = today(); writeJson('autoshorts.json', store); };
+const usedIds = () => new Set(Object.keys(readJson('autoshorts.json', { used: {} }).used || {}));
+// ChatGPT 자동 만들기에서 고를 수 있는 종류
+const GPT_AUTO = { ssul: '썰', topic: '주제·정보', character: '캐릭터' };
+
 const jobTypes = {
+  async extract(job, log) {
+    const { url, format } = job.input;
+    const dir = path.join(DOWNLOADS, job.id);
+    await fs.mkdir(dir, { recursive: true });
+    log(`${format} 받는 중 · ${url}`);
+    const file = await extract(config, url, format, dir, log);
+    const meta = { url, format, title: path.basename(file, path.extname(file)), file: path.basename(file), at: new Date().toISOString() };
+    await fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2));
+    log(`저장: ${file}`);
+    return { id: job.id, title: meta.title };
+  },
+  // ③ 주제·정보와 썰(kind: 'ssul')이 같이 쓴다: 대본 → 장면 그림(codex) → 확대·슬라이드 전환 영상. 주제가 비면 요즘 화제에서 AI가 고른다
   async reel(job, log) {
-    let dir = newShortDir('topic', job.input.topic);
+    const kind = job.input.kind === 'ssul' ? 'ssul' : 'topic';
+    const topic = String(job.input.topic || '').trim();
+    let dir = newShortDir(kind, topic || (kind === 'ssul' ? '썰' : '주제'));
     await fs.mkdir(path.join(dir, 'media'), { recursive: true });
     job.result = { dir }; saveJobs();
     const files = [];
@@ -336,12 +427,17 @@ const jobTypes = {
       await fs.copyFile(file, path.join(dir, name));
       files.push(name);
     }
-    log('Codex로 대본과 장면 설명 작성 중');
-    const output = await runAI(config, 'codex', reelPrompt({ ...job.input, seconds: lengthRange('topic', job.input.length) }), { cwd: dir, log });
+    const hints = topic || job.input.source || job.input.narration ? [] : trendHints();
+    if (!topic) log(job.input.source ? '붙여 넣은 글로 주제를 정합니다' : `주제가 비어 요즘 화제 ${hints.length}개에서 AI가 고릅니다`);
+    log(`Codex로 ${kind === 'ssul' ? '썰 대본' : '대본'}과 장면 설명 작성 중`);
+    const seconds = lengthRange(kind, job.input.length);
+    const prompt = kind === 'ssul' ? ssulPrompt({ ...job.input, topic, seconds, hints }) : reelPrompt({ ...job.input, topic, seconds, hints });
+    const output = await runAI(config, 'codex', prompt, { cwd: dir, log });
     let script = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null'));
     if (!script) script = lastJson(output);
     validateReel(script, job.input.narration || '');
-    Object.assign(script, { kind: 'topic', ...fontPick(job.input), ...(TITLE_STYLES[job.input.titleStyle] ? { titleStyle: job.input.titleStyle } : {}) });
+    script.look = lookFor(kind, kind === 'ssul' ? '' : script.look, jobs.filter((j) => j.type === 'reel').length);
+    Object.assign(script, { kind, ...(topic ? {} : { topic: uploadTitle(script) }), ...fontPick(job.input), ...(TITLE_STYLES[job.input.titleStyle] ? { titleStyle: job.input.titleStyle } : {}) });
     if (files.length) assignMedia(script.scenes, files);
     else script.scenes.forEach((scene, i) => { scene.media = `media/scene-${String(i + 1).padStart(2, '0')}.png`; });
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
@@ -350,7 +446,7 @@ const jobTypes = {
     log(`Codex 이미지 생성 · ${script.scenes.length}장`);
     const imagePrompt = [
       '내장 image_gen.imagegen 도구를 이용해 아래 장면마다 서로 다른 이미지를 각각 한 장 생성한다.',
-      '각 이미지는 글자나 로고 없는 세로 영상용 삽화이며 일관된 시각 스타일을 유지한다.',
+      '각 이미지는 글자나 로고 없는 세로(9:16) 실사 사진이다. 그림·만화·웹툰·일러스트·3D 렌더처럼 보이면 안 된다(2026-11-22 사용자: 애니메이션 그림체는 촌스럽다). 실제 카메라로 찍은 질감·자연광·피부와 물건의 실제 질감, 장면끼리 같은 색감을 유지한다.',
       '도구가 생성한 실제 이미지 파일을 지정된 media 경로에 PNG로 복사한다. 대체 이미지, 코드로 그린 그림, 빈 파일을 쓰지 않는다.',
       '현재 작업 폴더 밖의 파일은 수정하지 않는다. 도구를 사용할 수 없거나 생성에 실패하면 실패를 보고하고 중단한다. script.json은 수정하지 않는다.',
       ...script.scenes.map((scene) => `${scene.media}: ${scene.image_prompt}`)
@@ -377,7 +473,7 @@ const jobTypes = {
     if (!script) { script = lastJson(output); if (script) await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2)); }
     if (!script?.scenes?.length) throw new Error('script.json을 만들지 못했습니다');
     // 제목 스타일: 고른 것이 있으면 그것, '자동'이면 AI가 대본에 고른 것(없거나 틀리면 기본). 다시 렌더링해도 같게 script.json에 남긴다
-    Object.assign(script, { kind: 'material', ...fontPick(job.input) });
+    Object.assign(script, { kind: 'material', look: lookFor('material'), ...fontPick(job.input) });
     if (TITLE_STYLES[job.input.titleStyle]) script.titleStyle = job.input.titleStyle;
     else if (!TITLE_STYLES[script.titleStyle]) delete script.titleStyle;
     if (job.input.font && !script.titleStyle) script.font = job.input.font;
@@ -390,37 +486,45 @@ const jobTypes = {
     if (!inShorts(job.input.dir)) throw new Error('숏폼 폴더가 아닙니다');
     const script = parseJson(await fs.readFile(path.join(job.input.dir, 'script.json'), 'utf8'));
     await writeUploadTxt(job.input.dir, script);
-    if (script.layout === 'clip') return { dir: job.input.dir, video: await renderClip(job.input.dir, script, { chromePath: config.chromePath, log }) };
+    if (script.layout === 'clip') return { dir: job.input.dir, video: await renderClip(job.input.dir, script, { chromePath: config.chromePath, tts: ttsOptions(), log }) };
     if (script.kind === 'character') { const root = needRoot(); const ch = await character.readCharacter(root); return { dir: job.input.dir, video: await renderCharacter(job.input.dir, { ...script, ...character.validateCharScript(script, character.approvedPoses(ch)) }, { root, tts: ttsOptions(), voice: ch.voice, log }) }; }
     return { dir: job.input.dir, video: await renderShort(job.input.dir, script, { tts: ttsOptions(), log }) };
   },
   // 쇼츠 자동화: 고른 분야마다 요즘 뜨는 영상을 찾아 클립 숏폼을 한 편씩 차례로 만든다(한꺼번에 돌리면 AI·다운로드가 몰린다)
   async autoshorts(job, log) {
     needRoot();
+    // ChatGPT 쪽: 썰·주제·캐릭터를 요즘 화제에서 주제를 골라 차례로(겹치지 않게 앞서 만든 주제를 알려 준다)
+    if (job.input.ai === 'gpt') {
+      const kinds = (job.input.kinds || []).filter((k) => GPT_AUTO[k]);
+      if (!kinds.length) throw new Error('종류를 하나 이상 골라 주세요');
+      const per = Math.min(3, Math.max(1, Number(job.input.per) || 1));
+      job.result = { made: [], failed: [] }; saveJobs();
+      const avoid = [];
+      for (const kind of kinds) for (let i = 0; i < per; i++) {
+        log(`[${GPT_AUTO[kind]}] ${i + 1}/${per} 만드는 중`);
+        const type = kind === 'character' ? 'character' : 'reel';
+        const child = startJob(type, { kind, topic: '', length: job.input.length || 'normal', avoid: [...avoid], auto: kind }, jobTypes[type]);
+        await child.wait;
+        const made = child.result?.dir ? path.basename(child.result.dir).slice(9) : '';
+        if (made) avoid.push(made);
+        (child.status === 'done' ? job.result.made : job.result.failed).push({ cat: kind, title: made || GPT_AUTO[kind], job: child.id, ...(child.error ? { why: child.error } : {}) });
+        saveJobs();
+        log(`[${GPT_AUTO[kind]}] ${child.status === 'done' ? `완성: ${made}` : `실패: ${child.error}`}`);
+      }
+      if (!job.result.made.length) throw new Error('한 편도 만들지 못했습니다. 작업 로그를 확인하세요');
+      return job.result;
+    }
     const cats = (job.input.cats || []).filter((id) => AUTO_CATS[id]);
     if (!cats.length) throw new Error('분야를 하나 이상 골라 주세요');
     const per = Math.min(3, Math.max(1, Number(job.input.per) || 1));
-    const store = readJson('autoshorts.json', { used: {} });
-    const used = new Set(Object.keys(store.used));
+    const used = usedIds();
     job.result = { made: [], failed: [] }; saveJobs();
     for (const id of cats) {
       const cat = AUTO_CATS[id];
-      let list = [];
-      if (config.youtubeKey) {
-        try { list = await trendingApi(config.youtubeKey, cat); log(`[${cat.name}] 유튜브 인기 차트 ${list.length}개`); } catch (e) { log(`[${cat.name}] 인기 차트를 못 받음(${e.message}) → 검색으로`); }
-      }
-      let picks = pickFresh(list, cat, used, per);
-      if (picks.length < per) {
-        list = [...list, ...(await searchUrl(config, weekSearchUrl(cat.query), 40).catch((e) => { log(`이번 주 검색 실패: ${e.message}`); return []; }))];
-        picks = pickFresh(list, cat, used, per);
-      }
-      if (picks.length < per) {
-        list = [...list, ...(await searchVideos(config, cat.query, 30).catch(() => []))];
-        picks = pickFresh(list, cat, used, per);
-      }
+      const picks = await findFresh(cat, per, used, log);
       if (!picks.length) { log(`[${cat.name}] 쓸 만한 새 영상이 없습니다`); job.result.failed.push({ cat: id, why: '새 영상 없음' }); saveJobs(); continue; }
       for (const v of picks) {
-        used.add(v.id); store.used[v.id] = today(); writeJson('autoshorts.json', store);
+        used.add(v.id); markUsed(v);
         log(`[${cat.name}] ${v.title} · ${v.channel} · 조회 ${v.views} → 만드는 중`);
         const child = startJob('clip', { kind: cat.kind, topic: v.title, urls: [v.url], length: job.input.length || 'normal', engine: job.input.engine, auto: id }, jobTypes.clip);
         await child.wait;
@@ -439,16 +543,15 @@ const jobTypes = {
     const poses = character.approvedPoses(ch);
     if (!poses.includes('idle') || poses.length < 4) throw new Error('캐릭터 포즈를 4개 이상(기본 포함) 승인해 주세요');
     const topic = String(job.input.topic || '').trim();
-    if (!topic) throw new Error('주제를 입력해 주세요');
     const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
-    let dir = again ? job.input.dir : newShortDir('character', topic);
+    let dir = again ? job.input.dir : newShortDir('character', topic || '캐릭터');
     await fs.mkdir(path.join(dir, 'media'), { recursive: true });
     job.result = { dir }; saveJobs();
     log('codex로 대본 쓰는 중');
     await fs.rm(path.join(dir, 'script.json'), { force: true });
-    const output = await runAI(config, 'codex', character.charScriptPrompt({ ...job.input, topic, name: ch.name }, poses), { cwd: dir, log });
+    const output = await runAI(config, 'codex', character.charScriptPrompt({ ...job.input, topic, name: ch.name, hints: topic ? [] : trendHints() }, poses), { cwd: dir, log });
     const raw = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null')) || lastJson(output);
-    const script = { ...character.validateCharScript(raw, poses), topic, format: job.input.format || 'tuk', ...fontPick(job.input) };
+    const script = { ...character.validateCharScript(raw, poses), look: lookFor('character', '', jobs.filter((j) => j.type === 'character').length), topic: topic || (raw?.title || [])[0] || '캐릭터', format: job.input.format || 'tuk', ...fontPick(job.input) };
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
     dir = await settleShortDir(job, dir, script, log);
     log(`대본: ${script.scenes.reduce((n, s) => n + s.lines.length, 0)}줄 · 배경 그림 ${script.scenes.length}장 생성 중`);
@@ -502,13 +605,37 @@ const jobTypes = {
   },
   // 클립 숏폼(docs/클립-숏폼-설계.md): 원본 찾기 → 받기 → 장면 모음 그림 → AI 구간·자막 → 렌더
   async clip(job, log) {
-    const { topic, urls = [] } = job.input;
+    let { topic = '', urls = [] } = job.input;
+    topic = String(topic).trim();
+    // 클립 숏폼(연예인·인급동)은 따로 고른 엔진(설정 → AI '클립 숏폼 엔진', 기본 claude). 썰·캐릭터는 기본 엔진
+    const engine = job.input.engine || config.clipEngine || 'claude';
+    let hotFound = null;
+    // 빈 칸 ①: 요즘 검색이 확 늘어난 연예·방송 화제에서 고른다(무대·예능·인터뷰 다)
+    if (!topic && !urls.length && !job.input.dir && job.input.kind !== 'viral') {
+      const hot = await hotCeleb(engine, usedIds(), log).catch((e) => { log(`급상승 화제 고르기 실패: ${e.message}`); return null; });
+      if (hot) {
+        topic = hot.topic; hotFound = hot.found;
+        job.input = { ...job.input, topic, hot: hot.why, notes: [job.input.notes, `요즘 뜨는 이유: ${hot.why}`].filter(Boolean).join('\n') }; saveJobs();
+        log(`빈 칸 → 급상승 화제 '${topic}' (${hot.why}) · 후보 ${hotFound.length}개`);
+      }
+    }
+    // 빈 칸: 그 종류의 자동 만들기 분야에서 요즘 뜨는(조회수 순) 새 영상 하나를 골라 쓴다
+    if (!topic && !urls.length && !job.input.dir) {
+      const want = job.input.kind === 'viral' ? 'viral' : 'celeb';
+      const cats = Object.values(AUTO_CATS).filter((c) => c.kind === want).sort(() => Math.random() - 0.5);
+      const used = usedIds();
+      for (const cat of cats) {
+        const [v] = await findFresh(cat, 1, used, log);
+        if (v) { log(`빈 칸 → [${cat.name}] ${v.title} · ${v.channel} · 조회 ${v.views}`); markUsed(v); topic = v.title; urls = [v.url]; break; }
+      }
+      if (!urls.length) throw new Error('요즘 뜨는 새 영상을 찾지 못했습니다. 인물·화제나 영상 주소를 넣어 주세요');
+      job.input = { ...job.input, topic, urls }; saveJobs();
+    }
     // 다시 생성이면 원래 폴더에서(받아 둔 원본은 yt-dlp가 다시 받지 않는다)
     const again = job.input.dir && inShorts(job.input.dir) && existsSync(job.input.dir);
     let dir = again ? job.input.dir : newShortDir(job.input.kind === 'viral' ? 'viral' : 'celeb', topic);
     await fs.mkdir(path.join(dir, 'src'), { recursive: true });
     job.result = { dir }; saveJobs();
-    const engine = job.input.engine || config.engine;
     let infos;
     if (urls.length) {
       log(`넣은 영상 ${urls.length}개 정보 읽는 중`);
@@ -519,12 +646,25 @@ const jobTypes = {
       // ponytail: 저작권 기본값(가) — 연예인 핫은 인증 배지가 있는 채널만(큰 팬 채널도 인증일 수 있어 '공식' 보장은 아니다).
       // 해외 재밌는 영상은 원작자 채널만: 모음·재업로드·리액션으로 보이는 후보를 빼고, 남은 것 중 원작자 영상을 AI가 고른다
       const viral = job.input.kind === 'viral';
-      const found = viral ? (await searchVideos(config, topic, 25)).filter(notCompilation) : (await searchVideos(config, topic)).filter((v) => v.verified);
+      let found = hotFound || (viral ? (await searchVideos(config, topic, 25)).filter(notCompilation) : (await searchVideos(config, topic)).filter((v) => v.verified));
+      // ① 주제 모음('관객 난입 레전드' 등): 제목 검색으론 장면이 확실한 공식 영상이 2개 남짓(2026-11-22) →
+      // AI가 알려진 장면을 인물별 검색어로 꼽고(celebtrend themeQueriesPrompt), 검색어마다 공식 영상 상위 3개를 모은다
+      if (!viral && !hotFound && isThemeTopic(topic)) {
+        let ideas = [];
+        try { ideas = normalizeCelebPicks(lastJson(await runAI(config, engine, themeQueriesPrompt(topic, job.input.notes), { cwd: dir, log })), 6); } catch (e) { log(`장면 꼽기 실패: ${e.message}`); }
+        for (const q of ideas) {
+          const got = (await searchVideos(config, q.query, 10).catch(() => [])).filter((v) => v.verified && v.duration <= 15 * 60).slice(0, 3);
+          log(`장면 후보: ${q.name} — ${q.why} (공식 영상 ${got.length}개)`);
+          found = [...found, ...got.map((v) => ({ ...v, title: `${v.title} [찾은 장면: ${q.name} — ${q.why}]` }))];
+        }
+        found = found.filter((v, i) => found.findIndex((x) => x.id === v.id) === i);
+      }
       if (!found.length) throw new Error(viral ? '원작자 채널로 보이는 영상을 찾지 못했습니다. 영어 키워드로 바꾸거나 영상 주소를 직접 넣어 주세요' : '인증된(공식) 채널 영상을 찾지 못했습니다. 영상 주소를 직접 넣어 주세요');
       log(`후보 ${found.length}개 → ${engine}로 고르는 중`);
-      const picks = pickIds(lastJson(await runAI(config, engine, pickPrompt({ ...job.input, kind: job.input.kind === 'viral' ? 'viral' : 'celeb' }, found), { cwd: dir, log })), found);
+      const picks = pickIds(lastJson(await runAI(config, engine, pickPrompt({ ...job.input, kind: job.input.kind === 'viral' ? 'viral' : 'celeb' }, found), { cwd: dir, log })), found, job.input.kind === 'viral' ? 2 : 5);
       infos = [];
       for (const v of picks) infos.push(await videoInfo(config, v.url));
+      if (hotFound) picks.forEach(markUsed);
     }
     const sources = [];
     for (const [i, info] of infos.entries()) {
@@ -545,11 +685,14 @@ const jobTypes = {
     const raw = parseJson(await fs.readFile(path.join(dir, 'script.json'), 'utf8').catch(() => 'null')) || lastJson(output);
     const kept = sources.map(({ n, url, title, channel, duration, file }) => ({ n, url, title, channel, duration, file }));
     const script = { ...validateClip(raw, kept), kind, ...fontPick(job.input), ...(CLIP_STYLES[job.input.clipStyle] ? { clipStyle: job.input.clipStyle } : {}), sources: kept, mute: Boolean(job.input.mute) };
+    // ② 해설 대본이면 해설 형식 화면(검정 + 노랑/흰 제목, ©원작자). 고른 형식이 있으면 그대로
+    if (script.narrate && !script.clipStyle) script.clipStyle = 'story';
+    if (kind === 'celeb' && !script.clipStyle) script.clipStyle = 'issue'; // ① 새 대본은 이슈 형식(2026-11-22)
     script.description = withCredits(script.description, kept);
     await fs.writeFile(path.join(dir, 'script.json'), JSON.stringify(script, null, 2));
     dir = await settleShortDir(job, dir, script, log);
     log(`구간 ${script.scenes.length}개 → 렌더링`);
-    return { dir, video: await renderClip(dir, script, { chromePath: config.chromePath, log }) };
+    return { dir, video: await renderClip(dir, script, { chromePath: config.chromePath, tts: ttsOptions(), log }) };
   },
   async write(job, log) {
     const since = Date.now() - 5000;
@@ -585,6 +728,7 @@ const jobTypes = {
     if (!postDir || !existsSync(postDir)) throw new Error('게시물 폴더를 찾지 못했습니다');
     log(`게시물 폴더: ${postDir}`);
     if (inPlace && state.drafted[postDir]) { delete state.drafted[postDir]; saveState(); log('글이 바뀌어 임시저장 표시를 지웠습니다 — 다시 임시저장하세요'); }
+    job.result = { postDir }; saveJobs(); // 임시저장이 실패해도 쓴 글 폴더는 남긴다
     if (job.input.draft) await draft(postDir, log, job.input.account);
     return { postDir };
   },
@@ -1073,6 +1217,40 @@ const routes = {
     return { ok: true };
   },
   // 미리보기용 mp4 스트리밍 (Range 지원 — 브라우저 video 태그가 탐색할 수 있게). shorts 폴더 밖은 거절.
+  // ---- mp3·mp4 추출기 ----
+  'GET /api/extracts': async () => extractList(),
+  // 받은 파일 내려받기(?dl=1, 휴대폰도 브라우저 다운로드) 또는 미리 듣기·보기(Range 지원)
+  'GET /api/extracts/file': async (req, res, url) => {
+    const dir = extractDir(url.searchParams.get('id'));
+    const meta = dir && await fs.readFile(path.join(dir, 'meta.json'), 'utf8').then(JSON.parse).catch(() => null);
+    if (!meta?.file || path.basename(meta.file) !== meta.file) return send(res, 404, { error: 'not found' });
+    const file = path.join(dir, meta.file);
+    const { size } = await fs.stat(file);
+    const head = { 'Content-Type': MEDIA_TYPE[meta.format] || 'application/octet-stream', 'Accept-Ranges': 'bytes' };
+    if (url.searchParams.get('dl')) head['Content-Disposition'] = `attachment; filename="download.${meta.format}"; filename*=UTF-8''${encodeURIComponent(meta.file).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`;
+    const range = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+    if (!range) { res.writeHead(200, { ...head, 'Content-Length': size }); return createReadStream(file).pipe(res); }
+    const start = Number(range[1] || 0), end = range[2] ? Number(range[2]) : size - 1;
+    res.writeHead(206, { ...head, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 });
+    createReadStream(file, { start, end }).pipe(res);
+  },
+  // 이 PC 탐색기로 저장 폴더 열기(받은 파일 폴더 또는 전체 downloads)
+  'POST /api/extracts/open': async (req) => {
+    const { id } = await jsonBody(req);
+    const target = id ? extractDir(id) : DOWNLOADS;
+    if (!target) throw new Error('잘못된 항목입니다');
+    await fs.mkdir(DOWNLOADS, { recursive: true });
+    if (!existsSync(target)) throw new Error('폴더가 없습니다');
+    spawn('explorer.exe', [target], { detached: true, stdio: 'ignore' }).unref();
+    return { ok: true };
+  },
+  // 지우기: 영구 삭제가 아니라 휴지통으로
+  'POST /api/extracts/delete': async (req) => {
+    const target = extractDir((await jsonBody(req)).id);
+    if (!target || !existsSync(target)) throw new Error('이미 없습니다');
+    await toRecycleBin(target);
+    return { ok: true };
+  },
   'GET /api/shorts/video': async (req, res, url) => {
     const dir = url.searchParams.get('dir') || '';
     if (!inShorts(dir)) return send(res, 403, { error: 'forbidden' });
@@ -1108,7 +1286,11 @@ const routes = {
     const { type, ...input } = JSON.parse(await body(req));
     if (!jobTypes[type]) throw new Error(`알 수 없는 작업: ${type}`);
     if (type === 'write' && !String(input.topic || '').trim()) throw new Error('주제가 비었습니다');
-    if (type === 'reel' && !String(input.topic || '').trim()) throw new Error('주제를 입력해 주세요');
+    if (type === 'extract') {
+      if (!youtubeUrl(input.url)) throw new Error('유튜브 영상 주소를 넣어 주세요 (youtube.com/watch, youtu.be, shorts)');
+      if (!EXTRACT_FORMATS.includes(input.format)) throw new Error('mp3 또는 mp4를 골라 주세요');
+      input.url = String(input.url).trim();
+    }
     if (type === 'reel') {
       if (!Array.isArray(input.files || []) || (input.files || []).length > 8) throw new Error('이미지와 영상은 최대 8개까지 넣을 수 있습니다');
       for (const file of input.files || []) {
@@ -1120,12 +1302,10 @@ const routes = {
       }
     }
     if (type === 'clip') {
-      if (!String(input.topic || '').trim()) throw new Error('인물이나 화제를 입력해 주세요');
       if (!Array.isArray(input.urls || []) || (input.urls || []).length > 3 || (input.urls || []).some((u) => !youtubeUrl(u))) throw new Error('영상 주소는 유튜브 주소로 3개까지 넣어 주세요');
     }
     if (type === 'write') needRoot(rootOf(naverAccountOrNone(input.account)));
     if (['shorts', 'reel', 'render', 'discover', 'clip', 'poses', 'autoshorts', 'character'].includes(type)) needRoot();
-    if (type === 'character' && !String(input.topic || '').trim()) throw new Error('주제를 입력해 주세요');
     if (type === 'autoshorts' && jobs.some((j) => j.type === 'autoshorts' && j.status === 'running')) throw new Error('쇼츠 자동화가 이미 돌고 있습니다');
     if (type === 'poses' && jobs.some((j) => j.type === 'poses' && j.status === 'running')) throw new Error('포즈를 이미 만드는 중입니다');
     if (type === 'visit' && jobs.some((j) => j.type === 'visit' && j.status === 'running')) throw new Error('답방 준비가 이미 진행 중입니다');

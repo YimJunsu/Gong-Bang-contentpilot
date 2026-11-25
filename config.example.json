@@ -3,6 +3,7 @@
   "lanHost": "",
   "blogRoot": "",
   "engine": "codex",
+  "clipEngine": "claude",
   "headless": true,
   "chromePath": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   "shortentsIntervalMin": 30,

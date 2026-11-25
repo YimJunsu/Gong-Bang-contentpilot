@@ -14,6 +14,7 @@ import { chromium } from 'playwright-core';
 import ffmpegPath from 'ffmpeg-static';
 import { EdgeTTS } from 'node-edge-tts';
 import { titleStyleOf } from './title-styles.mjs';
+import { ALL_LOOKS as LOOKS } from './shorts-kinds.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS = path.join(HERE, 'assets', 'fonts');
@@ -169,6 +170,28 @@ async function speakCached(text, tone, cacheDir, tts, prosody) {
   return speak(text, tone, file, tts, prosody);
 }
 
+const joinUnits = (us) => us.map((u) => u.text).join(' ');
+const bare = (t) => t.replace(/^[*"'“‘(\[]+|[*"'”’)\].,!?…~ㅋㅎㅠ]+$/g, '');
+// 덩어리 하나에 다 안 들어가면 가장 자연스러운 자리에서 둘로 나누고, 또 길면 다시 나눈다
+function splitClause(us, max) {
+  if (us.length < 2 || joinUnits(us).length <= max) return [us];
+  let best = 1, score = -Infinity;
+  for (let i = 1; i < us.length; i++) {
+    const l = joinUnits(us.slice(0, i)).length, r = joinUnits(us.slice(i)).length;
+    let sc = -Math.abs(l - r) / 2;
+    const prev = us[i - 1].text, p = bare(prev), n = bare(us[i].text);
+    if (/[,，]["'”’*]*$/.test(prev)) sc += 10; // 쉼표 뒤
+    if (/(는데|지만|니까|으니|어서|아서|해서|하고|이고|고|면|며|다가|더니|려고|자마자)$/.test(p)) sc += 6; // 이어지는 말 끝
+    if (/^(게|거|것|걸|건|수|줄|때|데|듯|뿐|만큼|중|적|채)$/.test(n)) sc -= 12; // '똑같은 | 게'처럼 꾸미는 말과 받는 말 사이
+    else if (/[은던을]$|[한된인될할]$/.test(p) && !/는데$/.test(p)) sc -= 3;
+    if (n.length <= 1 && i === us.length - 1) sc -= 8; // 한 글자 꼬리
+    if (/\d[만천억원]?$/.test(p) && /^\d/.test(n)) sc -= 12; // '14만 | 6700원' 숫자 가운데
+    if (/^[ㅋㅎㅠㅜ]+$/.test(n)) sc -= 12;
+    if (sc > score) { score = sc; best = i; }
+  }
+  return [...splitClause(us.slice(0, best), max), ...splitClause(us.slice(best), max)];
+}
+
 // 단어 타이밍을 자막 덩어리(한 화면에 2줄 이하)로 묶는다. 문장 끝에서는 반드시 끊는다
 export function chunkCaptions(text, words, total, maxChars = 22) {
   const units = words?.length
@@ -179,13 +202,16 @@ export function chunkCaptions(text, words, total, maxChars = 22) {
       let t = 0;
       return parts.map((p) => { const d = (p.length / sum) * total; const u = { text: p, start: t, end: t + d }; t += d; return u; });
     })();
-  const chunks = [];
-  let cur = null;
+  // 문장마다 나누고, 긴 문장은 말이 끊기는 자리(쉼표·'~는데' 등)에서 반씩 나눈다 — 꽉 채우고 남은 꼬리만 넘기지 않는다
+  const sentences = [];
   for (const u of units) {
-    const sentenceEnd = /[.!?…]$/.test(cur?.text || '');
-    if (!cur || sentenceEnd || (cur.text + ' ' + u.text).length > maxChars) { cur = { text: u.text, start: u.start, end: u.end, units: [u] }; chunks.push(cur); }
-    else { cur.text += ` ${u.text}`; cur.end = u.end; cur.units.push(u); }
+    const last = sentences.at(-1);
+    const tail = /^[ㅋㅎㅠㅜ~!?.]+$/.test(u.text); // 'ㅠㅠ' 같은 꼬리는 앞 문장에 붙인다
+    if (!last || (!tail && /[.!?…]["'”’)*]*$/.test(last.at(-1).text))) sentences.push([u]); else last.push(u);
   }
+  const chunks = sentences.flatMap((s) => splitClause(s, maxChars)).map((us) => ({
+    text: joinUnits(us), start: us[0].start, end: us.at(-1).end, units: us
+  }));
   // 덩어리 사이 빈틈 없이 다음 덩어리 시작까지 늘린다 (깜빡임 방지)
   chunks.forEach((c, i) => { c.end = i < chunks.length - 1 ? chunks[i + 1].start : Math.max(c.end, total); });
   if (chunks.length) chunks[0].start = 0;
@@ -306,7 +332,14 @@ function sceneData(scene, v, i, ctx) {
   captions.forEach((c, k) => { if (k < captions.length - 1 && captions[k + 1].start - c.end < 0.3) c.end = captions[k + 1].start; });
   const loud = v.parts.find((p) => p.tone !== 'normal' && p.tone !== 'whisper');
   const media = scene.media ? path.resolve(ctx.dir, scene.media) : null;
+  // 컨셉 꾸미기(look): 정보형 포인트 목록·번호, 썰 포스트잇 색 이어 가기·지난 줄
+  const all = ctx.script.scenes || [];
+  const points = all.map((s) => String(s.point || '').trim()).filter(Boolean);
+  const before = all.slice(0, i).filter((s) => String(s.point || '').trim()).length;
   return {
+    look: LOOKS.includes(ctx.script.look) ? ctx.script.look : '',
+    points, pointNo: String(scene.point || '').trim() ? before + 1 : 0, pointsDone: before,
+    capBase: ctx.capBase?.[i] || 0, prevText: ctx.prevText?.[i] || '',
     index: i + 1, seconds: v.seconds, offset: ctx.offsets[i], total: ctx.total, fonts: ctx.fonts,
     title: { lines: ctx.script.title || [], badge: ctx.script.badge || '', style: ctx.titleStyle },
     kind: media && IMAGE.test(media) ? 'image' : media && VIDEO.test(media) ? 'video' : 'color',
@@ -371,7 +404,15 @@ export async function renderShort(dir, script, { tts = {}, log = () => {} } = {}
   const titleStyle = titleStyleOf(script);
   const face = FONT_CHOICES[titleStyle.font] || FONT_CHOICES.blackhan;
   log(`제목 스타일: ${titleStyle.name}`);
-  const ctx = { dir, script, offsets, total, titleStyle, fonts: { T: pathToFileURL(path.join(FONTS, face.file)).href, B: pathToFileURL(path.join(FONTS, 'Pretendard-ExtraBold.otf')).href } };
+  const font = (id) => pathToFileURL(path.join(FONTS, FONT_CHOICES[id].file)).href;
+  const fonts = { T: pathToFileURL(path.join(FONTS, face.file)).href, B: pathToFileURL(path.join(FONTS, 'Pretendard-ExtraBold.otf')).href };
+  // 컨셉 꾸미기는 정해진 글꼴을 쓴다: G 지마켓, M 마루 부리, S 써라운드, F 프리젠테이션
+  if (LOOKS.includes(script.look)) Object.assign(fonts, { G: font('gmarket'), M: font('maruburi'), S: font('ssurround'), F: font('freesentation'), K: font('blackhan') });
+  // 썰: 포스트잇 색을 장면이 바뀌어도 이어 가고(앞 장면 자막 수), 장면 첫 자막 위에 앞 장면 마지막 문장을 회색으로
+  const capBase = voices.map((_, i) => voices.slice(0, i).reduce((n, v) => n + v.parts.length, 0));
+  const prevText = scenes.map((_, i) => (i ? spoken(scenes[i - 1].lines.at(-1).text) : ''));
+  const ctx = { dir, script, offsets, total, titleStyle, fonts, capBase, prevText };
+  if (script.look) log(`꾸미기: ${script.look}`);
 
   // 2) 장면을 몇 개씩 동시에 찍는다
   const browser = await chromium.launch({ executablePath: tts.chromePath, headless: true, args: ['--allow-file-access-from-files'] });

@@ -53,10 +53,92 @@
   .slim.cap-glow .c1 em { color:#fff3b0; }
   .slim.cap-glow .c2 { margin-top:6px; font-size:40px; color:#fff; text-shadow:0 0 14px var(--glow), 0 2px 5px rgba(0,0,0,.7); }
 
+  /* stick: 응원봉 테두리(① 연예인 핫, 2026-11-22 시안 ①B). 흰 띠 + 검은 제목, 이름(*강조*)은 응원봉 색 빛 테두리, 자막은 흰 글씨 + 응원봉 색 밑줄 */
+  .stick #band { gap:6px; padding-top:30px; box-sizing:border-box; }
+  .stick .t1, .stick .t2 { font-size:78px; line-height:1.25; color:var(--tc); background:none; padding:0; letter-spacing:-2px; }
+  .stick .t1 em, .stick .t2 em { color:var(--tc); display:inline-block; padding:0 26px 6px; margin:0 4px; border:6px solid var(--k); border-radius:999px; box-shadow:0 0 18px var(--k), inset 0 0 12px color-mix(in srgb, var(--k) 45%, transparent); }
+  .stick #credit { top:22px; left:0; right:0; padding:0; background:none; text-align:center; font-size:26px; letter-spacing:4px; color:var(--k); }
+  .stick #cap { bottom:300px; left:110px; right:110px; }
+  .stick .c1 { display:inline; font-size:62px; color:#fff; -webkit-text-stroke:0; border-bottom:7px solid var(--k); padding:0 10px 10px; text-shadow:0 2px 12px rgba(0,0,0,.85); }
+  .stick .c1 em { color:#fff; text-shadow:0 0 16px var(--k), 0 2px 10px rgba(0,0,0,.8); }
+  .stick .c2 { margin-top:28px; font-size:40px; color:#fff; -webkit-text-stroke:0; text-shadow:0 0 12px rgba(0,0,0,.9), 0 2px 4px rgba(0,0,0,.9); }
+  .stick .c2 em { color:#fff; }
+
+  /* ① 이슈 형식(2026-11-22 레퍼런스): 출처 줄은 영상 맨 위 가운데 작게, 설명 자막(c1)은 | 로 두 줄,
+     팬 반응(#react)은 자막 위 어두운 상자, TOP N(fmt-top)은 영상 위쪽에 인물 이름(흰 굵게) + 노란 한 줄 평 */
+  .stick #credit { top:calc(var(--top) + 16px); letter-spacing:.5px; font-size:28px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+  #react { display:none; position:absolute; left:70px; right:70px; bottom:470px; text-align:center; }
+  #react span { display:inline-block; max-width:900px; padding:16px 30px 20px; border-radius:14px; background:rgba(12,12,18,.78); color:#fff; font:46px/1.35 B; text-align:left; word-break:keep-all; }
+  .stick #react:not(:empty) { display:block; }
+  body.zone-bottom #react { bottom:auto; top:calc(var(--top) + 300px); }
+  #label { display:none; position:absolute; left:40px; right:40px; top:calc(var(--top) + 80px); text-align:center; font:84px/1.15 T; color:#fff; -webkit-text-stroke:14px #000; paint-order:stroke fill; letter-spacing:-2px; }
+  .fmt-top #label:not(:empty) { display:block; }
+  .fmt-top.stick #cap { bottom:auto; top:calc(var(--top) + 190px); left:50px; right:50px; }
+  .fmt-top.stick .c1 { border:0; padding:0; font-size:50px; color:#ffe14a; -webkit-text-stroke:10px #000; paint-order:stroke fill; text-shadow:none; }
+  .fmt-top.stick .c1 em { color:#fff; text-shadow:none; }
+
+  /* stamp: 빨간 도장 형식(② 해외 꿀잼, 시안 ②B 색 2번). 검은 띠 + 왼쪽 정렬 굵은 제목 + 오른쪽 위 원 도장, 자막은 노란 카드 */
+  .stamp #band { align-items:flex-start; justify-content:center; gap:10px; padding:0 300px 0 70px; box-sizing:border-box; }
+  .stamp .t1 { font-family:B; font-size:50px; line-height:1.25; color:var(--crc); background:none; padding:0; text-align:left; letter-spacing:-1px; max-width:none; }
+  .stamp .t1, .stamp .t2 { word-break:keep-all; }
+  .stamp .t2 { font-size:96px; line-height:1.1; color:var(--tc); background:none; padding:0; text-align:left; letter-spacing:-3px; max-width:none; }
+  .stamp .t1 em, .stamp .t2 em { color:var(--stamp); }
+  #stampmark { display:none; }
+  .stamp #stampmark { display:grid; position:absolute; right:56px; top:calc(var(--top) / 2 - 115px); width:230px; height:230px; border:11px solid var(--stamp); border-radius:50%; box-sizing:border-box; place-items:center; color:var(--stamp); font:58px T; letter-spacing:-2px; transform:rotate(14deg); }
+  .stamp #stampmark:empty { display:none; }
+  .stamp #cap { bottom:300px; left:60px; right:60px; }
+  .stamp .c1 { display:inline-block; font-size:56px; line-height:1.3; color:var(--cardink); background:var(--card); -webkit-text-stroke:0; padding:14px 34px 18px; border-radius:22px; box-shadow:0 9px 0 var(--cardsh); }
+  .stamp .c1 em { color:var(--cardink); text-decoration:underline; text-decoration-thickness:6px; text-underline-offset:8px; }
+  .stamp .c2 { margin-top:26px; font-size:40px; color:#fff; -webkit-text-stroke:9px #000; }
+  .stamp #ksub { bottom:300px; -webkit-text-stroke:0; text-shadow:none; }
+  .stamp #ksub span { display:inline-block; color:var(--cardink); background:var(--card); padding:14px 34px 18px; border-radius:22px; box-shadow:0 9px 0 var(--cardsh); font-size:54px; }
+  /* 터지는 순간 반응: 도장 색 글자 + 흰 외곽선, 영상 위쪽에 기울여서 */
+  body.layer-pop.stamp #cap { bottom:auto; top:calc(var(--top) + 120px); left:70px; right:auto; text-align:left; }
+  body.layer-pop.stamp .c1 { background:none; box-shadow:none; padding:0; font-family:T; font-size:96px; color:var(--stamp); -webkit-text-stroke:16px #fff; paint-order:stroke fill; transform:rotate(-7deg); }
+  body.layer-pop.stamp .c1 em { color:var(--stamp); text-decoration:none; }
+
+  /* story: 해설 형식(② 해외, 레퍼런스 '해치웠나'). 검정 바탕 + 굵은 제목 2줄(노랑/흰), 영상은 가운데(--vh), 아래 검정 칸에 ©원작자.
+     자막(layer sub)은 해설 문장 — 영상 아래쪽 1/3에 흰 굵은 글씨 + 검정 테두리, *강조*는 노랑 */
+  .story #band { gap:2px; padding-top:20px; box-sizing:border-box; }
+  .story .t1, .story .t2 { font-size:94px; line-height:1.14; padding:0; background:none; letter-spacing:-3px; word-break:keep-all; }
+  .story .t1 em { color:#fff; }
+  .story .t2 em { color:var(--em); }
+  .story #owner { font:italic 36px B; color:var(--crc); top:calc(var(--top) + var(--vh) + 26px); }
+  .story #credit { top:calc(var(--top) + var(--vh) + 26px); left:0; right:0; padding:0; background:none; text-align:center; font:italic 38px B; color:var(--crc); letter-spacing:.5px; }
+  .story #ksub { top:calc(var(--top) + var(--vh) * .62); bottom:auto; left:50px; right:50px; font-family:T; font-size:70px; line-height:1.22; color:#fff; -webkit-text-stroke:14px #000; text-shadow:none; }
+  .story #ksub em { font-style:normal; color:#ffe14a; }
+  body.zone-bottom.story #ksub { top:calc(var(--top) + 90px); }
+  body.zone-cover.story #ksub { top:auto; bottom:calc(1920px - var(--top) - var(--vh) + 50px); }
+
+  /* issue: ① 이슈 형식(2026-11-22 레퍼런스 '원데이슈'). 흰 띠 + 검은 굵은 첫 줄·빨간 둘째 줄, 영상(--vh) 아래 흰 칸에 ©채널.
+     출처 줄은 영상 맨 위 가운데 작게, 설명 자막은 영상 아래쪽에 흰 글씨 + 그림자(상자 없음), 팬 반응은 검정 상자 */
+  .issue #band { gap:0; padding-top:14px; box-sizing:border-box; }
+  .issue .t1, .issue .t2 { font-size:90px; line-height:1.17; letter-spacing:-3px; padding:0; background:none; word-break:keep-all; }
+  .issue .t1 em { color:var(--em); }
+  .issue .t2 em { color:var(--t1); }
+  .issue #credit { top:calc(var(--top) + 14px); left:0; right:0; padding:0; background:none; text-align:center; font:26px B; color:rgba(255,255,255,.9); text-shadow:0 1px 5px rgba(0,0,0,.95); }
+  #owner { display:none; position:absolute; left:0; right:0; top:calc(var(--top) + var(--vh) + 40px); text-align:center; font:34px B; color:var(--crc); }
+  .issue #owner:not(:empty), .story #owner:not(:empty) { display:block; }
+  .issue #cap { bottom:calc(1920px - var(--top) - var(--vh) + 70px); left:50px; right:50px; }
+  .issue .c1 { display:block; font:56px/1.36 B; color:#fff; -webkit-text-stroke:0; text-shadow:0 0 10px rgba(0,0,0,.95), 0 2px 4px rgba(0,0,0,.95), 0 0 2px #000; }
+  .issue .c1 em { color:#ffe14a; }
+  .issue .c2 { font:40px B; color:#fff; -webkit-text-stroke:0; text-shadow:0 0 8px #000, 0 2px 3px #000; }
+  .issue #react { bottom:calc(1920px - var(--top) - var(--vh) + 250px); }
+  .issue #react:not(:empty) { display:block; }
+  .issue #react span { background:rgba(0,0,0,.84); border-radius:6px; font:44px/1.38 B; padding:14px 26px 18px; }
+  .issue #react span em { font-style:normal; color:#ff5b73; }
+  .fmt-top.issue #cap { bottom:auto; top:calc(var(--top) + 190px); }
+  .fmt-top.issue .c1 { font:52px/1.3 B; color:#ffe14a; -webkit-text-stroke:10px #000; paint-order:stroke fill; text-shadow:none; }
+  .fmt-top.issue .c1 em { color:#fff; }
+
   /* 시간에 따라 켜지는 글자판(layer): sub = 번역 자막(깔끔한 흰 글씨), pop = 터지는 순간 반응(형식의 말풍선 그대로, 자막 위로) */
   #ksub { position:absolute; left:60px; right:60px; bottom:190px; text-align:center; word-break:keep-all; font-family:B; font-size:56px; line-height:1.3; color:#fff; -webkit-text-stroke:7px rgba(0,0,0,.85); paint-order:stroke fill; text-shadow:0 3px 10px rgba(0,0,0,.55); display:none; }
-  body.layer-sub #band, body.layer-sub #credit, body.layer-sub #cap, body.layer-pop #band, body.layer-pop #credit { display:none !important; }
+  body.layer-sub #owner, body.layer-pop #owner, body.layer-sub #band, body.layer-sub #credit, body.layer-sub #cap, body.layer-sub #stampmark, body.layer-pop #band, body.layer-pop #credit, body.layer-pop #stampmark { display:none !important; }
   body.layer-sub #ksub { display:block; }
+  /* 원본에 박힌 자막·글자 피하기(script.textZone): 아래에 있으면 우리 자막을 영상 위쪽으로, 위에 있으면 말풍선을 아래로 */
+  body.zone-bottom #cap, body.zone-bottom #ksub { bottom:auto; top:calc(var(--top, 380px) + 60px); }
+  body.zone-bottom.layer-pop #cap { top:calc(var(--top, 380px) + 330px); }
+  body.zone-top.layer-pop #cap { top:auto; bottom:520px; }
   body.layer-pop #cap { bottom:430px; }
   body.layer-pop.slim #cap { bottom:560px; }
 </style></head>
@@ -65,26 +147,42 @@
   <div id="credit"></div>
   <div id="cap"></div>
   <div id="ksub"></div>
+  <div id="react"></div>
+  <div id="label"></div>
+  <div id="owner"></div>
+  <div id="stampmark"></div>
 <script>
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const marked = (text) => esc(text).replace(/\*(.+?)\*/g, '<em>$1</em>');
 let loaded = false;
-window.setup = async ({ fonts, style = {}, title = [], caption, sub, credit, layer = '', text = '' }) => {
+window.setup = async ({ fonts, style = {}, title = [], caption, sub, credit, layer = '', text = '', stamp = '', zone = 'none', react = '', label = '', format = '', owner = '' }) => {
   if (!loaded) {
     for (const [family, url] of Object.entries(fonts)) { const f = new FontFace(family, `url("${url}")`); await f.load(); document.fonts.add(f); }
     loaded = true;
   }
-  document.body.className = [style.layout || 'band', style.emMode && `em-${style.emMode}`, style.capMode && `cap-${style.capMode}`, layer && `layer-${layer}`].filter(Boolean).join(' ');
+  document.body.className = [style.layout || 'band', style.emMode && `em-${style.emMode}`, style.capMode && `cap-${style.capMode}`, layer && `layer-${layer}`, zone !== 'none' && `zone-${zone}`, format && `fmt-${format}`].filter(Boolean).join(' ');
   if (layer === 'pop') caption = text, sub = '';
-  $('#ksub').innerHTML = layer === 'sub' ? esc(text).split('|').join('<br>') : '';
-  const vars = [['--top', style.top ? `${style.top}px` : ''], ['--bg', style.bg], ['--t1', style.t1], ['--t1box', style.t1Box || 'transparent'], ['--t2', style.t2], ['--t2box', style.t2Box || 'transparent'], ['--em', style.em], ['--shadow', style.shadow], ['--line', style.line], ['--tc', style.tc], ['--emc', style.emc], ['--embg', style.embg], ['--crc', style.crc], ['--dot', style.dot], ['--capem', style.capem], ['--glow', style.glow]];
+  const subHtml = marked(text).split('|').join('<br>');
+  $('#ksub').innerHTML = layer === 'sub' ? (style.layout === 'stamp' ? `<span>${subHtml}</span>` : subHtml) : '';
+  $('#stampmark').textContent = layer ? '' : String(stamp || '').slice(0, 4);
+  const vars = [['--k', style.k], ['--stamp', style.stamp], ['--card', style.card], ['--cardink', style.cardInk], ['--cardsh', style.cardShadow],['--top', style.top ? `${style.top}px` : ''], ['--vh', style.vh ? `${style.vh}px` : ''], ['--bg', style.bg], ['--t1', style.t1], ['--t1box', style.t1Box || 'transparent'], ['--t2', style.t2], ['--t2box', style.t2Box || 'transparent'], ['--em', style.em], ['--shadow', style.shadow], ['--line', style.line], ['--tc', style.tc], ['--emc', style.emc], ['--embg', style.embg], ['--crc', style.crc], ['--dot', style.dot], ['--capem', style.capem], ['--glow', style.glow]];
   for (const [k, v] of vars) if (v) document.body.style.setProperty(k, v);
   const [a = '', b = ''] = title;
   $('#band').innerHTML = `${a ? `<div class="t1">${marked(a)}</div>` : ''}${b ? `<div class="t2">${marked(b)}</div>` : ''}`;
   $('#credit').style.display = credit ? '' : 'none';
   $('#credit').textContent = credit || '';
-  $('#cap').innerHTML = `${caption ? `<div class="c1">${marked(caption)}</div>` : ''}${sub ? `<div class="c2">${marked(sub)}</div>` : ''}`;
+  $('#cap').innerHTML = `${caption ? `<div class="c1">${marked(caption).split('|').join('<br>')}</div>` : ''}${sub ? `<div class="c2">${marked(sub)}</div>` : ''}`;
+  $('#react').innerHTML = react && !layer ? `<span>${marked(react)}</span>` : '';
+  $('#label').textContent = layer ? '' : label;
+  $('#owner').textContent = layer ? '' : owner;
   await document.fonts.ready;
+  // 도장 형식 큰 줄: 한 줄에 들어가게 글자를 줄인다(64px까지). 그래도 길면 단어 단위로 두 줄
+  const big = style.layout === 'stamp' && $('.t2');
+  if (big) {
+    big.style.whiteSpace = 'nowrap';
+    for (let px = 96; px > 64 && big.scrollWidth > big.parentElement.clientWidth - 370; px -= 4) big.style.fontSize = `${px - 4}px`;
+    if (big.scrollWidth > big.parentElement.clientWidth - 370) big.style.whiteSpace = '';
+  }
 };
 </script></body></html>

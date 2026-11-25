@@ -35,7 +35,16 @@ export const TITLE_FONTS = {
 // ---- 클립형(①②) 위 띠 형식·색 (assets/clip.html) ----
 // layout: band(두 줄 박스) | sticker(스티커 제목 + 말풍선 자막) | slim(얇은 띠 + 이름 칩/별 강조 + 색 선, 출처는 띠 왼쪽 위)
 // t1·t2 = 글자색, t1Box·t2Box = 그 줄 뒤 박스 색(없으면 박스 없음), em = *강조* 글자색, top = 띠 높이, bg = 띠 색, shadow = 스티커 그림자, line = 띠 아래 선
+// stick(① 응원봉 테두리): k = 응원봉 색. stamp(② 도장): stamp = 도장·강조 색, card·cardInk·cardShadow = 자막 카드
+// 2026-11-22: 꾸미기 고르기를 없애고 컨셉마다 하나로 고정(시안 docs/숏폼-꾸미기-시안.html). 아래 예전 형식은 예전 대본을 다시 렌더할 때만 쓴다
 export const CLIP_STYLES = {
+  stickCoral: { name: '응원봉 코랄', desc: '흰 띠 + 검은 제목, 이름은 코랄 핑크 빛 테두리', layout: 'stick', top: 330, bg: '#ffffff', tc: '#15151c', k: '#ff5c8a' },
+  stickPurple: { name: '응원봉 보라', desc: '흰 띠 + 검은 제목, 이름은 보라 빛 테두리', layout: 'stick', top: 330, bg: '#ffffff', tc: '#15151c', k: '#a855ff' },
+  // ② 해설 형식(2026-11-22 레퍼런스 '해치웠나'): 검정 바탕, 노랑/흰 제목 2줄, 가운데 영상(vh), 영상 아래 ©원작자, 해설 자막은 흰 글씨 + 검정 테두리
+  // ① 이슈 형식(2026-11-22 레퍼런스 '원데이슈'·'담장너', 사용자: 예전 꾸미기 최악): 흰 띠 + 검은/빨간 굵은 제목 2줄, 영상 1080×1200(원본 1080p를 거의 안 늘림), 아래 흰 칸에 ©채널
+  issue: { name: '이슈', desc: '흰 바탕 + 검은·빨간 제목 2줄, 가운데 영상, 깔끔한 설명 자막', layout: 'issue', top: 400, vh: 1200, bg: '#ffffff', t1: '#111111', t2: '#ec1c3f', em: '#ec1c3f', crc: '#8a8a8a' },
+  story: { name: '해설', desc: '검정 바탕 + 노랑·흰 제목 2줄, 가운데 영상, 아래 ©원작자', layout: 'story', top: 400, vh: 1200, bg: '#000000', t1: '#ffe14a', t2: '#ffffff', em: '#ffe14a', crc: '#9a9a9a' },
+  stampYellow: { name: '도장', desc: '검은 띠 + 굵은 흰 제목 + 노란 원 도장, 노란 자막 카드', layout: 'stamp', top: 380, bg: '#111111', tc: '#ffffff', crc: '#b5b5b5', stamp: '#ffd400', card: '#ffd400', cardInk: '#111111', cardShadow: '#000000' },
   chip: { name: '화이트 칩', desc: '연예인 핫 기본 — 흰 띠, 이름은 분홍 칩, 분홍→보라 선', layout: 'slim', top: 330, bg: '#ffffff', tc: '#15172b', emMode: 'pill', emc: '#ffffff', embg: '#ff3d8b', line: 'linear-gradient(90deg,#ff3d8b,#8b5cff)', crc: '#8a8fa3', dot: '#ff3d8b', capMode: 'dark', capem: '#ff8fbf' },
   night: { name: '라벤더 밤', desc: '보라→남색 띠, 이름은 ✦ 민트, 흰 칩 자막', layout: 'slim', top: 330, bg: 'linear-gradient(120deg,#2a1747,#121a3a)', tc: '#ffffff', emMode: 'star', emc: '#7dffd1', line: '#7dffd1', crc: '#b9b3d6', dot: '#7dffd1', capMode: 'light', capem: '#8b5cff' },
   peach: { name: '피치 그라데', desc: '분홍→살구 띠, 이름은 흰 칩, 빛 번짐 자막', layout: 'slim', top: 330, bg: 'linear-gradient(90deg,#ff6f9f,#ffb36b)', tc: '#ffffff', emMode: 'pill', emc: '#ff3d7f', embg: '#ffffff', line: '#ffffff', crc: '#fff1f5', dot: '#ffffff', capMode: 'glow', glow: '#ff5c95' },
@@ -50,9 +59,12 @@ export const CLIP_STYLES = {
 
 // 탭별 기본값(사용자가 바꾸면 그 값). docs/숏폼-통합-설계.md
 export const KIND_DEFAULTS = {
-  celeb: { font: 'gmarket', clipStyle: 'chip' },
-  viral: { font: 'blackhan', clipStyle: 'sticker' },
+  celeb: { font: 'blackhan', clipStyle: 'issue' },
+  viral: { font: 'blackhan', clipStyle: 'stampYellow' },
   topic: { font: 'freesentation', titleStyle: 'auto' },
   material: { font: 'ssurround', titleStyle: 'auto' }
 };
-export const clipStyleOf = (script = {}) => CLIP_STYLES[script.clipStyle] || CLIP_STYLES[(KIND_DEFAULTS[script.kind] || {}).clipStyle] || CLIP_STYLES.chip;
+// ① 연예인은 AI가 영상 분위기로 응원봉 색을 고른다(script.accent: coral | purple)
+export const clipStyleOf = (script = {}) => CLIP_STYLES[script.clipStyle]
+  || (script.kind === 'celeb' && script.accent === 'purple' ? CLIP_STYLES.stickPurple : null)
+  || CLIP_STYLES[(KIND_DEFAULTS[script.kind] || {}).clipStyle] || CLIP_STYLES.chip;

@@ -25,6 +25,7 @@
 
   #cap { position:absolute; left:60px; right:60px; top:1590px; height:230px; display:flex; align-items:center; justify-content:center; text-align:center; }
   .cap { font-family:B; font-size:76px; line-height:1.28; color:#fff; -webkit-text-stroke:14px #000; paint-order:stroke fill; word-break:keep-all; }
+  .cap { text-wrap:balance; } .cap .glue { white-space:nowrap; }
   .cap .w { display:inline-block; margin:0 .12em; transform-origin:50% 80%; }
   .cap .now { color:#ffe600; }
   .cap.angry { font-family:T; font-size:94px; color:#ff4a3d; -webkit-text-stroke:18px #000; }
@@ -43,11 +44,128 @@
 
   #bar { position:absolute; left:0; bottom:0; height:14px; background:#ffe600; }
   #track { position:absolute; left:0; right:0; bottom:0; height:14px; background:rgba(0,0,0,.45); }
+
+  /* ===== 컨셉 꾸미기(look, 2026-11-22 시안 docs/숏폼-꾸미기-시안.html). body.look-<id>일 때만 켜진다. 없으면 위 기본 무대 ===== */
+  #ltitle, #lpoints, #paper, #prev, #shade2 { display:none; }
+  .look #title, .look #bg { display:none; }
+  .look #ltitle, .look #prev { display:block; position:absolute; }
+  .look #frame { display:block; }
+  .look #box { width:100%; height:100%; }
+  .look #media { max-width:none; max-height:none; width:100%; height:100%; object-fit:cover; }
+  .look .cap { -webkit-text-stroke:0; }
+  .look .cap::before { content:none !important; }
+  .look #ltitle em { font-style:normal; }
+
+  /* 썰 A — 큰 글자 낭독: 어두운 화면, 위에 그림, 아래 지금 읽는 줄만 크게(지난 줄은 회색) */
+  /* ssul-photo(2026-11-22 사용자: 예전 썰 꾸미기 촌스러움, 그림은 실사로): 검정 바탕, 위 제목 2줄(흰·노랑),
+     실사 사진을 가로 꽉 차게, 사진 아래쪽에 굵은 흰 자막 + 검정 테두리. 스티커·이모지 없음 */
+  .look-ssul-photo #bgcolor { background:#000; }
+  .look-ssul-photo #ltitle { left:44px; right:44px; top:92px; text-align:center; font:96px/1.16 K; color:#fff; letter-spacing:-3px; word-break:keep-all; }
+  .look-ssul-photo #ltitle .l1 { color:#ffe14a; }
+  .look-ssul-photo #ltitle em { color:#ffe14a; }
+  .look-ssul-photo #frame { left:0; top:380px; width:1080px; height:1360px; }
+  .look-ssul-photo #box { border-radius:0; box-shadow:none; }
+  .look-ssul-photo #cap { left:46px; right:46px; top:1400px; height:300px; }
+  .look-ssul-photo .cap { font-family:B; font-size:74px; line-height:1.28; color:#fff; -webkit-text-stroke:15px #000; paint-order:stroke fill; letter-spacing:-1px; }
+  .look-ssul-photo .cap .now, .look-ssul-photo .cap .em { color:#ffe14a; }
+  .look-ssul-photo .sticker, .look-ssul-photo .emoji { display:none !important; }
+  .look-ssul-photo #bar { background:#ffe14a; height:8px; } .look-ssul-photo #track { height:8px; background:#1d1d1d; }
+
+  .look-ssul-read #bgcolor { background:#121212; }
+  .look-ssul-read #ltitle { left:70px; right:70px; top:90px; }
+  .look-ssul-read #ltitle .kick { font:32px B; color:#8a8a8a; letter-spacing:4px; }
+  .look-ssul-read #ltitle .tl { margin-top:10px; font:66px G; color:#fff; letter-spacing:-2px; line-height:1.2; }
+  .look-ssul-read #ltitle em { color:#ff8a3d; }
+  .look-ssul-read #frame { left:60px; top:330px; width:960px; height:820px; }
+  .look-ssul-read #box { border-radius:28px; }
+  .look-ssul-read #prev { left:80px; right:80px; top:1215px; font:48px M; color:#5a5a5a; line-height:1.35; }
+  .look-ssul-read #prev::before { content:"“"; position:absolute; left:-6px; top:-90px; font:200px M; color:#ff8a3d; line-height:1; }
+  .look-ssul-read #cap { left:80px; right:80px; top:1330px; height:420px; align-items:flex-start; justify-content:flex-start; text-align:left; }
+  .look-ssul-read .cap { font-family:G; font-size:82px; line-height:1.25; color:#fff; letter-spacing:-2px; }
+  .look-ssul-read .cap .now { color:#ff8a3d; }
+  .look-ssul-read .cap .em { color:#ff8a3d; }
+  .look-ssul-read #bar { background:#ff8a3d; height:10px; } .look-ssul-read #track { height:10px; background:#2a2a2a; }
+
+  /* 썰 B — 포스트잇: 하늘색 바탕, 그림은 폴라로이드, 자막은 색 포스트잇이 한 장씩 */
+  .look-ssul-note #bgcolor { background:#cfe3f0; }
+  .look-ssul-note #ltitle { left:60px; right:60px; top:120px; text-align:center; font:72px S; color:#1b3a52; letter-spacing:-2px; line-height:1.25; }
+  .look-ssul-note #ltitle em { color:#e0613a; }
+  .look-ssul-note #frame { left:130px; top:400px; width:820px; height:780px; transform:rotate(-2deg); }
+  .look-ssul-note #box { border-radius:6px; border:26px solid #fff; border-bottom-width:70px; box-shadow:0 22px 40px rgba(20,40,60,.25); box-sizing:border-box; }
+  .look-ssul-note #cap { left:150px; right:150px; top:1290px; height:440px; }
+  .look-ssul-note .cap { font-family:S; font-size:62px; line-height:1.38; color:#3a2f12; background:var(--pi, #fff27a); padding:56px 60px 62px; box-shadow:0 18px 30px rgba(20,40,60,.22); transform-origin:50% 0; }
+  .look-ssul-note .cap .now { color:#c2410c; }
+  .look-ssul-note .cap .em { color:#c2410c; }
+  .look-ssul-note #bar { background:#1b3a52; } .look-ssul-note #track { background:rgba(27,58,82,.18); }
+
+  /* 썰 C — 웹툰 컷: 흰 바탕, 굵은 테두리 그림 칸, 말풍선 자막 */
+  .look-ssul-toon #bgcolor { background:#fffdf7; }
+  .look-ssul-toon #ltitle { left:50px; right:50px; top:110px; text-align:center; font:76px S; color:#17171c; letter-spacing:-2px; line-height:1.25; }
+  .look-ssul-toon #ltitle em { color:#fff; background:#ff7a59; padding:0 20px 6px; border-radius:18px; }
+  .look-ssul-toon #frame { left:50px; top:330px; width:980px; height:1100px; }
+  .look-ssul-toon #box { border:12px solid #17171c; border-radius:26px; box-sizing:border-box; box-shadow:12px 12px 0 #17171c; }
+  .look-ssul-toon #cap { left:70px; right:70px; top:1490px; height:290px; }
+  .look-ssul-toon .cap { position:relative; font-family:S; font-size:60px; line-height:1.32; color:#17171c; background:#fff; border:10px solid #17171c; border-radius:44px; padding:30px 46px 36px; }
+  .look-ssul-toon .cap::after { content:""; position:absolute; left:120px; top:-58px; border:24px solid transparent; border-bottom:40px solid #17171c; }
+  .look-ssul-toon .cap .now, .look-ssul-toon .cap .em { color:#e2502b; }
+  .look-ssul-toon #bar { background:#ff7a59; } .look-ssul-toon #track { background:#eee; }
+
+  /* 정보 A — 체크리스트: 위 그림, 아래 흰 판에 포인트 목록(지난 것 체크·줄긋기, 지금 것 파랑) */
+  .look-info-check #bgcolor { background:#fff; }
+  .look-info-check #frame { left:0; top:0; width:1080px; height:1010px; }
+  .look-info-check #box { border-radius:0; box-shadow:none; }
+  .look-info-check #shade2 { display:block; position:absolute; left:0; right:0; top:0; height:560px; background:linear-gradient(rgba(0,0,0,.62), transparent); }
+  .look-info-check #ltitle { left:80px; right:80px; top:150px; font:96px F; color:#fff; letter-spacing:-3px; line-height:1.1; text-shadow:0 6px 24px rgba(0,0,0,.45); }
+  .look-info-check #ltitle em { color:#9fc0ff; }
+  .look-info-check #paper { display:block; position:absolute; left:0; right:0; top:960px; bottom:0; background:#fff; border-radius:56px 56px 0 0; box-shadow:0 -10px 30px rgba(0,0,0,.12); }
+  .look-info-check #lpoints { display:block; position:absolute; left:80px; right:80px; top:1040px; }
+  .look-info-check .pt { display:flex; gap:28px; align-items:center; font:52px F; color:#1b1b22; margin-bottom:30px; line-height:1.2; }
+  .look-info-check .pt i { width:66px; height:66px; border-radius:18px; border:6px solid #cfd3dc; flex:none; display:grid; place-items:center; font:44px B; color:#fff; font-style:normal; box-sizing:border-box; }
+  .look-info-check .pt.done { color:#9aa0ad; text-decoration:line-through; text-decoration-thickness:4px; }
+  .look-info-check .pt.done i { background:#3a6cff; border-color:#3a6cff; }
+  .look-info-check .pt.now { color:#3a6cff; }
+  .look-info-check .pt.now i { border-color:#3a6cff; }
+  .look-info-check #cap { left:80px; right:80px; top:1640px; height:220px; border-top:3px solid #eef0f4; }
+  .look-info-check .cap { font-family:F; font-size:54px; line-height:1.3; color:#1b1b22; }
+  .look-info-check .cap .now, .look-info-check .cap .em { color:#3a6cff; }
+  .look-info-check #bar { background:#3a6cff; } .look-info-check #track { background:#eef0f4; }
+
+  /* 정보 B — 큰 숫자: 그림 꽉 채움, 몇 번째 포인트인지 큰 노란 테두리 숫자, 아래 노란 띠 자막 */
+  .look-info-num #frame { left:0; top:0; width:1080px; height:1920px; }
+  .look-info-num #box { border-radius:0; box-shadow:none; }
+  .look-info-num #shade2 { display:block; position:absolute; inset:0; background:linear-gradient(rgba(0,0,0,.72), rgba(0,0,0,.25) 45%, rgba(0,0,0,.55)); }
+  .look-info-num #ltitle { left:50px; right:60px; top:90px; display:flex; align-items:flex-start; gap:26px; }
+  .look-info-num #ltitle .n { font:520px T; line-height:.9; color:transparent; -webkit-text-stroke:10px #ffe14d; flex:none; }
+  .look-info-num #ltitle .side { padding-top:110px; }
+  .look-info-num #ltitle small { display:block; font:34px B; color:#ffe14d; letter-spacing:2px; margin-bottom:16px; }
+  .look-info-num #ltitle b { display:block; font:82px F; color:#fff; line-height:1.15; letter-spacing:-3px; word-break:keep-all; }
+  .look-info-num #ltitle.nonum .n { display:none; }
+  .look-info-num #cap { left:0; right:0; top:1600px; height:306px; background:#ffe14d; padding:0 70px; }
+  .look-info-num .cap { font-family:F; font-size:58px; line-height:1.28; color:#111; }
+  .look-info-num .cap .now, .look-info-num .cap .em { color:#c2410c; }
+  .look-info-num #bar { background:#ffe14d; }
+
+  /* 내 자료 — 다이어리 스크랩: 사진 꽉 채움, 아래 찢은 종이에 손글씨 캡션, 도장은 동그란 스티커 */
+  .look-scrap #frame { left:0; top:0; width:1080px; height:1500px; }
+  .look-scrap #box { border-radius:0; box-shadow:none; }
+  .look-scrap #ltitle { left:60px; top:110px; right:60px; }
+  .look-scrap #ltitle .chip { display:inline-block; font:46px B; color:#fff; background:rgba(0,0,0,.5); padding:12px 30px 16px; border-radius:16px; }
+  .look-scrap #paper { display:block; position:absolute; left:-20px; right:-20px; bottom:0; height:600px; background:#fffaf0;
+     clip-path:polygon(0 7%,6% 3%,12% 8%,19% 2%,27% 7%,35% 1%,44% 6%,52% 2%,61% 8%,70% 3%,78% 7%,86% 1%,93% 6%,100% 2%,100% 100%,0 100%); }
+  .look-scrap #cap { left:90px; right:90px; top:1420px; height:360px; align-items:flex-start; justify-content:flex-start; text-align:left; }
+  .look-scrap .cap { font-family:M; font-size:64px; line-height:1.4; color:#2d2620; }
+  .look-scrap .cap .now, .look-scrap .cap .em { color:#e0613a; }
+  .look-scrap .sticker { left:870px; top:1250px; width:230px; height:230px; padding:0; border:0; border-radius:50%; background:#ff6b4a; color:#fff; font-family:S; font-size:52px; white-space:normal; display:grid; place-items:center; box-shadow:0 10px 20px rgba(0,0,0,.25); }
+  .look-scrap .sticker::before, .look-scrap .sticker::after { content:none; }
+  .look-scrap .sticker em { background:none; color:#fff; padding:0; }
+  .look-scrap #bar { background:#e0613a; } .look-scrap #track { background:rgba(0,0,0,.08); }
 </style></head>
 <body><div id="stage">
   <div id="bgcolor"></div><div id="bg"></div>
   <div id="frame"><div id="box"></div></div>
+  <div id="shade2"></div><div id="paper"></div>
   <div class="title" id="title"></div>
+  <div id="ltitle"></div><div id="lpoints"></div><div id="prev"></div>
   <div id="stickers"></div>
   <div id="cap"></div>
   <div id="track"></div><div id="bar"></div>
@@ -90,6 +208,27 @@ window.setup = async (scene) => {
     $('#box').appendChild(media);
     $('#bg').style.backgroundImage = scene.kind === 'image' ? `url("${scene.media}")` : '';
     $('#media').style.transformOrigin = `${scene.focus[0]}% ${scene.focus[1]}%`;
+  }
+  // 컨셉 꾸미기(look): 제목·포인트 목록을 그 모양으로
+  const look = scene.look || '';
+  document.body.className = look ? `look look-${look}` : '';
+  if (look) {
+    const em = (v) => esc(v).replace(/\*(.+?)\*/g, '<em>$1</em>');
+    const lines = scene.title?.lines || [];
+    const plain = lines.map((l) => String(l).replace(/\*/g, '')).join(' ');
+    const lt = $('#ltitle');
+    if (look === 'ssul-read') lt.innerHTML = `<div class="kick">썰 · ${esc(scene.title?.badge && scene.title.badge !== '썰' ? scene.title.badge : '오늘의 썰')}</div><div class="tl">${lines.map(em).join('<br>')}</div>`;
+    else if (look === 'info-num') {
+      const pt = scene.points?.[scene.pointNo - 1] || '';
+      lt.classList.toggle('nonum', !scene.pointNo);
+      lt.innerHTML = `<div class="n">${scene.pointNo || ''}</div><div class="side"><small>${esc(plain)}</small><b>${em(pt || lines[1] || lines[0] || '')}</b></div>`;
+    } else if (look === 'scrap') lt.innerHTML = plain ? `<span class="chip">${esc(plain)}</span>` : '';
+    else if (look === 'ssul-photo') lt.innerHTML = lines.map((l, k) => `<div class="l${k}">${em(l)}</div>`).join('');
+    else lt.innerHTML = lines.map(em).join('<br>');
+    $('#lpoints').innerHTML = look === 'info-check' ? (scene.points || []).map((p, k) => {
+      const st = k + 1 === scene.pointNo ? 'now' : k < (scene.pointsDone || 0) ? 'done' : '';
+      return `<div class="pt ${st}"><i>${st === 'done' ? '✓' : ''}</i><span>${esc(String(p).replace(/\*/g, ''))}</span></div>`;
+    }).join('') : '';
   }
   $('#stickers').innerHTML = [
     scene.stamp ? `<div class="sticker" id="stamp">${esc(scene.stamp.text).replace(/\*(.+?)\*/g, '<em>$1</em>')}</div>` : '',
@@ -148,7 +287,19 @@ window.renderAt = async (t) => {
   else {
     if (box.dataset.id !== String(c.id)) {
       box.dataset.id = c.id;
-      box.innerHTML = `<div class="cap ${c.tone}">${c.words.map((w, i) => `<span class="w${w.em ? ' fire' : ''}" data-i="${i}">${esc(w.text)}</span>`).join(' ')}</div>`;
+      const emCls = S.look ? ' em' : ' fire';
+      const n = S.captions.indexOf(c);
+      // 포스트잇 색은 자막마다 돌아가며(장면이 바뀌어도 이어지게 앞 장면 자막 수를 더한다)
+      const pi = ['#fff27a', '#ffc2d6', '#c8f5b8', '#bfe3ff'][((S.capBase || 0) + n) % 4];
+      // 포스트잇 기울기는 자막 칸(#cap)에 준다(.cap의 transform은 아래에서 튀어나오기 효과로 덮어쓴다)
+      box.style.transform = S.look === 'ssul-note' ? `rotate(${((S.capBase || 0) + n) % 2 ? 2 : -2.5}deg)` : '';
+      // '똑같은 게', '14만 6700원'처럼 받는 말·숫자는 앞 단어와 한 줄에 둔다(줄 끝에 한 글자만 남지 않게)
+      const glue = (i) => i > 0 && (/^(게|거|것|걸|건|수|줄|때|데|듯|뿐|만큼|중|적|채|개|명|번|원)[.,!?…]*$/.test(c.words[i].text) || /\d[만천억]?$/.test(c.words[i - 1].text) && /^\d/.test(c.words[i].text) || /^[ㅋㅎㅠㅜ]+$/.test(c.words[i].text));
+      const groups = [];
+      c.words.forEach((w, i) => { const sp = `<span class="w${w.em ? emCls : ''}" data-i="${i}">${esc(w.text)}</span>`; if (glue(i)) groups[groups.length - 1].push(sp); else groups.push([sp]); });
+      box.innerHTML = `<div class="cap ${c.tone}" style="--pi:${pi}">${groups.map((g) => g.length > 1 ? `<span class="glue">${g.join(' ')}</span>` : g[0]).join(' ')}</div>`;
+      // 썰 A: 바로 앞 자막(같은 장면)을 회색으로 위에
+      if (S.look === 'ssul-read') $('#prev').textContent = n > 0 ? S.captions[n - 1].words.map((w) => w.text).join(' ') : (S.prevText || '');
     }
     const capEl = box.firstChild;
     const shake = c.tone === 'angry' ? `translate(${Math.sin(t * 81) * 9}px, ${Math.cos(t * 63) * 5}px)` : '';
@@ -160,7 +311,7 @@ window.renderAt = async (t) => {
       const now = t >= w.start && t < w.end + 0.05;
       el.style.transform = `scale(${now ? 1.12 + 0.2 * (1 - ease.out(p)) : 1})`;
       el.classList.toggle('now', now && !w.em);
-      if (w.em) el.style.textShadow = fireShadow(t + w.start, 1.1);
+      if (w.em && !S.look) el.style.textShadow = fireShadow(t + w.start, 1.1);
     });
   }
 

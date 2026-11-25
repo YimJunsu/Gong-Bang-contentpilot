@@ -3,11 +3,34 @@
 export const SHORT_KINDS = {
   celeb: { name: '연예인 핫', job: 'clip', lengths: { short: [15, 25], normal: [20, 35], long: [35, 50] } },
   viral: { name: '해외 재밌는 영상', job: 'clip', lengths: { short: [20, 30], normal: [25, 40], long: [40, 58] } },
-  topic: { name: '주제·컨셉', job: 'reel', lengths: { short: [25, 40], normal: [40, 60], long: [60, 90] } },
+  ssul: { name: '썰', job: 'reel', lengths: { short: [30, 45], normal: [45, 60], long: [60, 90] } },
+  topic: { name: '주제·정보', job: 'reel', lengths: { short: [25, 40], normal: [40, 60], long: [60, 90] } },
   character: { name: '캐릭터', job: 'character', lengths: { short: [20, 30], normal: [30, 40], long: [40, 55] } },
   material: { name: '내 사진·자료', job: 'shorts', lengths: { short: [20, 35], normal: [30, 50], long: [50, 80] } }
 };
-export const LENGTH_NAMES = { short: '짧게', normal: '보통', long: '길게' };
+// AI 고르기(2026-11-22 사용자 결정): Claude = 원본 영상을 잘라 자막만 얹는 것, ChatGPT(codex) = 대본·그림을 새로 만드는 것(이미지 생성 모델이 있다).
+// 둘 다 이 PC의 CLI 로그인(구독 요금제)으로 돈다
+export const AI_GROUPS = {
+  claude: { name: 'Claude', desc: '원본 영상 편집 · 자막', kinds: ['celeb', 'viral'] },
+  gpt: { name: 'ChatGPT', desc: '대본 · 그림 생성', kinds: ['ssul', 'topic', 'material', 'character'] }
+};
+// 컨셉 꾸미기(2026-11-22, 시안 docs/숏폼-꾸미기-시안.html): 종류마다 정해진 모양. 여러 개면 영상마다 돌아가며(또는 AI가 내용에 맞게) 고른다.
+// 무대: 썰·정보·내 자료 = assets/stage.html, 캐릭터 = assets/character.html (body.look-<id>)
+export const LOOKS = {
+  ssul: ['ssul-photo'], // 2026-11-22: 예전 셋(ssul-read·note·toon)은 촌스럽다는 피드백 → 실사 사진 한 가지. 예전 대본은 저장된 look 그대로
+  topic: ['info-check', 'info-num'],
+  material: ['scrap'],
+  character: ['paper', 'chat', 'spot']
+};
+export const ALL_LOOKS = Object.values(LOOKS).flat();
+// 대본에 맞는 look이 없으면 종류의 것 중 하나(seed로 고르게 돌림)
+export function lookFor(kind, want, seed = Date.now()) {
+  const list = LOOKS[kind] || [];
+  if (list.includes(want)) return want;
+  return list.length ? list[Math.abs(Math.floor(seed)) % list.length] : '';
+}
+export const aiOfKind =(kind) => (AI_GROUPS.claude.kinds.includes(kind) ? 'claude' : 'gpt');
+export const LENGTH_NAMES ={ short: '짧게', normal: '보통', long: '길게' };
 
 export function lengthRange(kind, length = 'normal') {
   const k = SHORT_KINDS[kind] || SHORT_KINDS.topic;
@@ -16,7 +39,7 @@ export function lengthRange(kind, length = 'normal') {
 export const lengthText = (kind, length) => { const [a, b] = lengthRange(kind, length); return `${a}~${b}초`; };
 
 // 저장 폴더: shorts\<분류>\<날짜>-<업로드 제목>
-export const SHORT_FOLDERS = { celeb: '연예인', viral: '꿀잼', topic: '정보', character: '캐릭터', material: '내자료' };
+export const SHORT_FOLDERS = { celeb: '연예인', viral: '꿀잼', ssul: '썰', topic: '정보', character: '캐릭터', material: '내자료' };
 
 // 업로드용 제목·설명·해시태그(영상 폴더의 txt 파일). AI 대본 프롬프트마다 이 규칙을 붙인다
 export const UPLOAD_TXT = '업로드-제목·설명.txt';

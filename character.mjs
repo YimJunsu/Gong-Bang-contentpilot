@@ -105,13 +105,14 @@ export const CHAR_LENGTHS = { short: [20, 30], normal: [30, 40], long: [40, 55] 
 export const MOVES = ['idle', 'bounce', 'shake', 'pop', 'zoom', 'jump', 'slide', 'tilt', 'nod'];
 export const FX = ['sweat', 'sparkle', 'anger', 'question', 'heart', 'shock'];
 
-export function charScriptPrompt({ topic, format = 'tuk', notes = '', length = 'normal', name }, poses) {
+export function charScriptPrompt({ topic, format = 'tuk', notes = '', length = 'normal', name, hints = [], avoid = [] }, poses) {
   const f = CHAR_FORMATS[format] || CHAR_FORMATS.free;
   const [a, b] = CHAR_LENGTHS[length] || CHAR_LENGTHS.normal;
   const poseList = POSES.filter(([id]) => poses.includes(id)).map(([id, ko]) => `${id}(${ko})`).join(', ');
   return [
     `유튜브 쇼츠용 캐릭터 영상 대본을 쓴다. 캐릭터 '${name}'가 화면 아래에 크게 서서 표정·자세를 바꾸고, 남자 목소리 내레이션이 깔린다. 결과는 이 폴더의 script.json 하나다.`,
-    `주제: ${topic}`, `형식: ${f.name} — ${f.desc}`, notes ? `요청(따른다): ${notes}` : '',
+    // 빈 주제: 요즘 화제에서 AI가 공감형 주제를 고른다(2026-11-22)
+    topic ? `주제: ${topic}` : `주제는 직접 정한다: 이 형식에 맞고 쇼츠 조회수가 잘 나올 공감 주제 하나(정치·사건사고·특정인 비방 금지).${hints.length ? ` 요즘 화제(참고만): ${hints.slice(0, 60).join(' / ')}` : ''}${avoid.length ? ` 이미 만든 주제(피한다): ${avoid.slice(0, 20).join(' / ')}` : ''}`, `형식: ${f.name} — ${f.desc}`, notes ? `요청(따른다): ${notes}` : '',
     '',
     '말투(가장 중요): 커뮤니티 썰 푸는 능청스러운 반말 내레이션. 문장 끝은 ~함/~거림/~임/~됨/~하는 편 같은 짧은 관찰체("맥날 카훗코 아이키아 거림", "할인 문자 오면 일단 장바구니부터 담음"). 구체적인 행동·대사·브랜드 같은 디테일로 웃긴다. 설명문·존댓말·교훈 금지. 마지막 줄은 반전이나 뼈 때리는 한 방.',
     '첫 줄은 3초 안에 멈추게 하는 훅: 주제를 그대로 외치거나("아이폰 쓰는 사람 특"), 공감 질문으로 시작.',

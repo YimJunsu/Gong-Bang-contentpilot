@@ -518,3 +518,34 @@ dialog.modal.retry { width: min(620px, 94vw); }
 .pickchip { padding: 8px 16px; border: 2px solid var(--line); border-radius: 99px; background: var(--paper); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .pickchip.on { border-color: var(--green); background: var(--green-soft); }
 ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+/* 2026-11-20 메뉴 정리: 블로그 / 숏폼 묶음, 맨 아래 묶음은 구분선 아래 */
+.nav-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.plain-link { color: inherit; text-decoration: none; }
+.plain-link:hover { text-decoration: underline; }
+.making-now { padding-top: 14px; padding-bottom: 14px; }
+details.look { margin-bottom: 14px; }
+.soon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.soon-card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; font: inherit; color: var(--ink); cursor: pointer; margin: 0; }
+.soon-card:hover { border-color: var(--green); }
+.soon-card b { font-size: 17px; }
+
+/* mp3·mp4 추출기 (2026-11-21). 휴대폰 폭에선 버튼이 아래 줄로 */
+.extract-list { display: flex; flex-direction: column; gap: 10px; }
+.extract-item { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.extract-item .info { flex: 1 1 240px; min-width: 0; }
+.extract-item .title-cell { overflow-wrap: anywhere; }
+.extract-item .actions-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.extract-player { width: 100%; max-height: 420px; border-radius: 10px; background: #000; }
+audio.extract-player { background: none; }
+.extract-job { gap: 10px; margin: 4px 0; flex-wrap: nowrap; }
+.extract-job .clamp { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 숏폼 맨 위 AI 고르기(2026-11-22): Claude = 원본 영상 편집, ChatGPT = 대본·그림 생성 */
+.ai-toggle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 560px; margin: 4px 0 14px; }
+.ai-toggle button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 16px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.ai-toggle button b { font-size: 16px; }
+.ai-toggle button span { font-size: 13px; color: var(--muted); }
+.ai-toggle button.on { border-color: var(--green); background: var(--green-soft); box-shadow: 0 0 0 3px rgba(0, 199, 60, .12); }
+.ai-toggle button.on b { color: var(--green-ink); }
+.ai-toggle button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

@@ -17,6 +17,14 @@ assert.ok(chunks.some((c) => c.text.endsWith('시작합니다.')) && chunks.at(-
 const even = chunkCaptions('가나 다라마 바사', null, 3);
 assert.equal(even.map((c) => c.text).join(' '), '가나 다라마 바사', '타이밍 없을 때 글자 비례');
 assert.equal(even.at(-1).end, 3);
+// 긴 문장은 꽉 채워 자르지 않고 말이 끊기는 자리에서 나눈다(2026-11-22 썰 영상: '똑같은 | 게 다섯 개')
+const cut = (t) => chunkCaptions(t, null, 5).map((c) => c.text);
+assert.deepEqual(cut('세일이라 쟁였는데, 집에 와 보니 똑같은 게 다섯 개 있었음.'), ['세일이라 쟁였는데,', '집에 와 보니 똑같은 게 다섯 개 있었음.'].flatMap((x) => x.length > 22 ? cut(x) : [x]));
+assert.ok(cut('세일이라 쟁였는데, 집에 와 보니 똑같은 게 다섯 개 있었음.').every((t) => !/^게 /.test(t) && t.length <= 22), '받는 말 앞에서 안 끊음');
+assert.deepEqual(cut('정리하다 서랍을 열었더니 미개봉 세럼 두 개, 크림 세 개가 나옴.'), ['정리하다 서랍을 열었더니', '미개봉 세럼 두 개, 크림 세 개가 나옴.'].flatMap((x) => x.length > 22 ? cut(x) : [x]));
+assert.deepEqual(cut('너네도 집에 중복템 쌓인 적 있음? ㅠㅠ'), ['너네도 집에 중복템 쌓인 적 있음? ㅠㅠ'], 'ㅠㅠ 꼬리는 붙임');
+assert.ok(!cut('인천 행복주택 110호, 기본 월세 14만 6700원부터 시작합니다.').some((t) => /^6700/.test(t)), '숫자 가운데서 안 끊음');
+assert.deepEqual(cut('짧은 말. 또 짧은 말.'), ['짧은 말.', '또 짧은 말.'], '문장 끝은 꼭 끊음');
 assert.equal(markEmphasis('제가 딱 세 개로 줄여 드릴게요.', '제가 *딱 세 개*로 줄여 드릴게요.'), '제가 *딱 세 개로* 줄여 드릴게요.', '조사 붙은 강조 어절');
 assert.equal(markEmphasis('보통 문장입니다.', '보통 문장입니다.'), '보통 문장입니다.', '강조 없음');
 // 자연스러운 감정: 기본 속도 위에 더하고, 보통 문장은 조금씩 흔들린다
@@ -26,4 +34,4 @@ assert.notDeepEqual(prosodyFor('normal', 0, '+10%'), prosodyFor('normal', 1, '+1
 assert.ok(pauseAfter('정말요?', 'normal') > pauseAfter('그래서,', 'normal'), '물음표 뒤가 쉼표 뒤보다 길다');
 assert.ok(pauseAfter('알려 드릴게요.', 'whisper') > pauseAfter('알려 드릴게요.', 'normal'), '속삭이기 전엔 한 박자');
 assert.ok(pauseAfter('알려 드릴게요.', 'angry') < pauseAfter('알려 드릴게요.', 'normal'), '화남으로 넘어갈 땐 바짝');
-console.log('video.check ok', chunks.map((c) => c.text));
+console.log('video.check ok', chunks.map((c) => c.text), cut('세일이라 쟁였는데, 집에 와 보니 똑같은 게 다섯 개 있었음.'), cut('정리하다 서랍을 열었더니 미개봉 세럼 두 개, 크림 세 개가 나옴.'), cut('한 병만 사려다가 세럼이랑 크림까지 담음.'));

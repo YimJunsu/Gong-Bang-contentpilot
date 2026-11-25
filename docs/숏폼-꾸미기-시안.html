@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>숏폼 꾸미기 시안 2</title>
+<style>
+  @font-face { font-family: G; src: url("../assets/fonts/GmarketSansTTFBold.ttf"); }
+  @font-face { font-family: BH; src: url("../assets/fonts/BlackHanSans-Regular.ttf"); }
+  @font-face { font-family: SR; src: url("../assets/fonts/Cafe24Ssurround-v2.0.ttf"); }
+  @font-face { font-family: FS; src: url("../assets/fonts/Freesentation-8ExtraBold.ttf"); }
+  @font-face { font-family: MB; src: url("../assets/fonts/MaruBuri-Bold.ttf"); }
+  @font-face { font-family: JU; src: url("../assets/fonts/Jua-Regular.ttf"); }
+  @font-face { font-family: PR; src: url("../assets/fonts/Pretendard-ExtraBold.otf"); }
+  :root { --bg:#f4f3ef; --ink:#17171c; --muted:#6b6b75; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:PR, system-ui, sans-serif; padding:32px 16px 60px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  .lead { color:var(--muted); margin:0 0 26px; font-size:15px; line-height:1.6; max-width:900px; }
+  section.kind { margin-bottom:40px; }
+  section.kind > h2 { font-size:19px; margin:0 0 14px; display:flex; gap:8px; align-items:center; }
+  .tag { font-size:12px; padding:2px 9px; border-radius:99px; background:#ffe3d6; font-weight:700; }
+  .tag.g { background:#dcefe4; }
+  .pair { display:flex; flex-wrap:wrap; gap:22px; }
+  .card { width:270px; }
+  .card h3 { font-size:15px; margin:10px 0 3px; }
+  .card p { margin:0; font-size:13px; color:var(--muted); line-height:1.55; }
+  .wrap { width:270px; height:480px; border-radius:14px; overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,.18); }
+  .f { width:1080px; height:1920px; transform:scale(.25); transform-origin:0 0; position:relative; overflow:hidden; background:#111; }
+  .vid { position:absolute; left:0; right:0; background:
+     radial-gradient(circle at 30% 35%, #8fb7d9 0, transparent 40%),
+     radial-gradient(circle at 70% 60%, #d9a38f 0, transparent 45%),
+     linear-gradient(160deg,#41506b,#22283a); }
+  .vid::after { content:"영상 자리"; position:absolute; inset:0; display:grid; place-items:center; font:56px PR; color:rgba(255,255,255,.28); }
+  .abs { position:absolute; }
+
+  /* ① A 무대 조명 */
+  .c1a { background:#08080c; }
+  .c1a .band { position:absolute; top:0; left:0; right:0; height:350px; padding:60px 70px 0;
+     background:radial-gradient(ellipse 60% 120% at 50% -30%, rgba(255,255,255,.22), transparent 70%), #08080c; }
+  .c1a .kick { font:28px PR; color:#8b8b98; letter-spacing:6px; }
+  .c1a .t { font:86px G; color:#fff; letter-spacing:-3px; line-height:1.16; margin-top:16px; }
+  .c1a .t em { font-style:normal; background:linear-gradient(90deg,#ff5f9e,#ffb35c); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .c1a .vid { top:350px; bottom:0; }
+  .c1a .cap { left:0; right:0; bottom:240px; text-align:center; font:60px G; color:#fff; text-shadow:0 0 18px rgba(255,95,158,.9), 0 3px 8px rgba(0,0,0,.8); }
+  .c1a .src { left:70px; bottom:110px; font:28px PR; color:rgba(255,255,255,.7); }
+
+  /* ① B 응원봉 테두리 */
+  .c1b .vid { inset:0; }
+  .c1b .fade { left:0; right:0; top:0; height:620px; background:linear-gradient(#000 0, rgba(0,0,0,.85) 45%, transparent); }
+  .c1b .t { left:0; right:0; top:150px; text-align:center; font:80px G; color:#fff; letter-spacing:-2px; line-height:1.3; }
+  .c1b .t em { font-style:normal; display:inline-block; padding:2px 30px 8px; border:6px solid #b6f; border-radius:99px; box-shadow:0 0 24px #b6f, inset 0 0 18px rgba(187,102,255,.6); }
+  .c1b .src { left:0; right:0; top:90px; text-align:center; font:28px PR; color:#d9c2ff; letter-spacing:4px; }
+  .c1b .cap { left:120px; right:120px; bottom:240px; text-align:center; }
+  .c1b .cap span { font:54px G; color:#fff; border-bottom:6px solid #b6f; padding:0 8px 8px; text-shadow:0 2px 10px rgba(0,0,0,.8); }
+
+  /* ② A 입체 글자 */
+  .c2a { background:#0f3d3a; }
+  .c2a .band { position:absolute; top:0; left:0; right:0; height:380px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; }
+  .c2a .flag { font:30px PR; color:#0f3d3a; background:#9ff2d5; padding:6px 22px 8px; border-radius:99px; }
+  .c2a .t { font:112px BH; color:#fff7d6; letter-spacing:-3px;
+     text-shadow:3px 3px 0 #ff7a3d, 6px 6px 0 #ff7a3d, 9px 9px 0 #ff7a3d, 12px 12px 0 #ff7a3d, 15px 15px 0 #c4501d; }
+  .c2a .vid { top:380px; bottom:0; }
+  .c2a .ksub { left:0; right:0; bottom:260px; text-align:center; }
+  .c2a .ksub span { font:54px G; color:#ffe14d; background:rgba(0,0,0,.82); padding:10px 26px 14px; }
+
+  /* ② B 도장 */
+  .c2b { background:#fff; }
+  .c2b .band { position:absolute; top:0; left:0; right:0; height:370px; background:#fff; padding:70px 70px 0; }
+  .c2b .t { font:92px BH; color:#111; letter-spacing:-3px; line-height:1.12; }
+  .c2b .t small { display:block; font:34px PR; color:#888; letter-spacing:0; margin-bottom:12px; }
+  .c2b .stamp { right:60px; top:70px; width:220px; height:220px; border:10px solid #e52d2d; border-radius:50%; color:#e52d2d; font:54px BH; display:grid; place-items:center; transform:rotate(14deg); opacity:.9; }
+  .c2b .vid { top:370px; bottom:0; }
+  .c2b .ksub { left:0; right:0; bottom:250px; text-align:center; }
+  .c2b .ksub span { font:52px G; color:#111; background:#fff; padding:14px 32px 18px; border-radius:20px; box-shadow:0 8px 0 #111; }
+  .c2b .pop { left:90px; top:560px; font:64px BH; color:#e52d2d; -webkit-text-stroke:10px #fff; paint-order:stroke fill; transform:rotate(-8deg); }
+
+  /* ③ A 큰 글자 낭독 */
+  .c3a { background:#121212; }
+  .c3a .no { left:80px; top:150px; font:32px PR; color:#777; letter-spacing:4px; }
+  .c3a .q { left:60px; top:230px; font:300px MB; color:#ff8a3d; line-height:1; }
+  .c3a .prev { left:80px; right:80px; top:560px; font:56px MB; color:#4a4a4a; line-height:1.5; }
+  .c3a .now { left:80px; right:80px; top:780px; font:96px G; color:#fff; line-height:1.25; letter-spacing:-3px; }
+  .c3a .now span { color:#ff8a3d; }
+  .c3a .bar { left:80px; right:80px; bottom:220px; height:8px; background:#2a2a2a; border-radius:9px; }
+  .c3a .bar i { display:block; width:42%; height:100%; background:#ff8a3d; border-radius:9px; }
+
+  /* ③ B 포스트잇 */
+  .c3b { background:#cfe3f0; }
+  .c3b .t { left:0; right:0; top:140px; text-align:center; font:76px SR; color:#1b3a52; letter-spacing:-2px; line-height:1.25; }
+  .c3b .p { width:760px; padding:60px 64px; font:58px SR; color:#3a2f12; line-height:1.4; box-shadow:0 18px 30px rgba(20,40,60,.2); }
+  .c3b .p1 { left:130px; top:470px; background:#fff27a; transform:rotate(-3deg); }
+  .c3b .p2 { left:190px; top:900px; background:#ffc2d6; transform:rotate(2.5deg); }
+  .c3b .p3 { left:150px; top:1320px; background:#c8f5b8; transform:rotate(-1.5deg); opacity:.55; }
+
+  /* ④ A 체크리스트 */
+  .c4a .vid { top:0; height:1080px; }
+  .c4a .t { left:80px; right:80px; top:170px; font:100px FS; color:#fff; line-height:1.1; letter-spacing:-3px; text-shadow:0 6px 24px rgba(0,0,0,.5); }
+  .c4a .list { left:0; right:0; top:1000px; bottom:0; background:#fff; border-radius:56px 56px 0 0; padding:80px 80px 0; }
+  .c4a .row { display:flex; gap:30px; align-items:center; font:56px FS; color:#1b1b22; margin-bottom:48px; }
+  .c4a .box { width:72px; height:72px; border-radius:18px; border:6px solid #cfd3dc; flex:none; display:grid; place-items:center; font:48px PR; color:#fff; }
+  .c4a .row.done .box { background:#3a6cff; border-color:#3a6cff; }
+  .c4a .row.done { color:#9aa0ad; text-decoration:line-through; text-decoration-thickness:4px; }
+  .c4a .row.now { color:#3a6cff; }
+
+  /* ④ B 큰 숫자 */
+  .c4b .vid { inset:0; filter:brightness(.7); }
+  .c4b .n { left:40px; top:60px; font:620px BH; color:transparent; -webkit-text-stroke:10px #ffe14d; line-height:1; }
+  .c4b .t { left:420px; right:60px; top:230px; font:84px FS; color:#fff; line-height:1.15; letter-spacing:-3px; }
+  .c4b .t small { display:block; font:32px PR; color:#ffe14d; letter-spacing:3px; margin-bottom:16px; }
+  .c4b .lower { left:0; right:0; bottom:200px; padding:36px 80px; background:#ffe14d; font:56px FS; color:#111; }
+
+  /* ⑤ A 필름 */
+  .c5a { background:#141414; }
+  .c5a .strip { left:90px; right:90px; top:260px; bottom:420px; background:#1c1c1c; }
+  .c5a .holes { top:0; bottom:0; width:60px; background:repeating-linear-gradient(#1c1c1c 0 40px, #e8e2d6 40px 76px, #1c1c1c 76px 110px); }
+  .c5a .holes.l { left:14px; } .c5a .holes.r { right:14px; }
+  .c5a .vid { left:110px; right:110px; top:50px; bottom:50px; }
+  .c5a .date { right:150px; bottom:470px; font:52px PR; color:#ff8a1f; letter-spacing:4px; text-shadow:0 0 10px rgba(255,138,31,.7); }
+  .c5a .t { left:0; right:0; top:120px; text-align:center; font:70px MB; color:#f3eadb; letter-spacing:-1px; }
+  .c5a .cap { left:100px; right:100px; bottom:250px; text-align:center; font:52px MB; color:#f3eadb; }
+
+  /* ⑤ B 스크랩 */
+  .c5b .vid { inset:0; }
+  .c5b .paper { left:-20px; right:-20px; bottom:0; height:560px; background:#fffaf0;
+     clip-path:polygon(0 8%,6% 4%,12% 9%,19% 3%,27% 8%,35% 2%,44% 7%,52% 3%,61% 9%,70% 4%,78% 8%,86% 2%,93% 7%,100% 3%,100% 100%,0 100%); }
+  .c5b .cap { left:90px; right:90px; bottom:250px; font:62px MB; color:#2d2620; line-height:1.4; }
+  .c5b .cap small { display:block; font:32px PR; color:#b28a5a; margin-bottom:12px; letter-spacing:2px; }
+  .c5b .stk { right:90px; bottom:390px; width:150px; height:150px; border-radius:50%; background:#ff6b4a; color:#fff; font:44px SR; display:grid; place-items:center; transform:rotate(12deg); }
+  .c5b .t { left:70px; top:140px; font:44px PR; color:#fff; background:rgba(0,0,0,.45); padding:10px 24px 14px; border-radius:12px; }
+
+  /* ⑥ A 색종이 */
+  .c6a { background:#6fd0c0; }
+  .c6a .s1 { left:-120px; top:900px; width:700px; height:700px; border-radius:50%; background:#ffcf5c; }
+  .c6a .s2 { right:-160px; top:420px; width:560px; height:560px; background:#ff8fa3; transform:rotate(18deg); border-radius:60px; }
+  .c6a .who { left:280px; top:780px; width:520px; height:700px; background:#fff; border-radius:260px 260px 60px 60px; box-shadow:14px 14px 0 rgba(0,0,0,.15); }
+  .c6a .t { left:0; right:0; top:150px; text-align:center; font:92px JU; color:#fff; -webkit-text-stroke:14px #234; paint-order:stroke fill; }
+  .c6a .cap { left:0; right:0; bottom:250px; text-align:center; }
+  .c6a .cap span { font:60px JU; color:#234; background:#fff; padding:16px 40px 22px; border-radius:26px; box-shadow:0 10px 0 #234; }
+
+  /* ⑥ B 채팅 반응 */
+  .c6b { background:linear-gradient(#2b2d52,#4b3f7a); }
+  .c6b .who { left:300px; bottom:0; width:480px; height:760px; background:#fff; border-radius:240px 240px 0 0; }
+  .c6b .t { left:80px; right:80px; top:140px; font:84px JU; color:#fff; line-height:1.2; }
+  .c6b .t span { color:#ffd84d; }
+  .c6b .chat { left:80px; top:440px; display:flex; flex-direction:column; gap:22px; }
+  .c6b .chat div { align-self:flex-start; font:46px JU; color:#fff; background:rgba(255,255,255,.14); padding:16px 30px 20px; border-radius:30px 30px 30px 8px; }
+  .c6b .chat div b { color:#9fe0ff; margin-right:12px; }
+  .c6b .say { right:70px; top:840px; width:520px; font:58px JU; color:#2b2d52; background:#ffd84d; padding:30px 40px 36px; border-radius:40px 40px 8px 40px; }
+</style>
+</head>
+<body>
+<h1>숏폼 꾸미기 시안 2 — 컨셉마다 두 벌</h1>
+<p class="lead">첫 시안은 모두 버리고 새로 그렸습니다. 컨셉마다 A·B 두 벌이니 하나씩 골라 주세요(예: ①B ②A ③A …). 영상 자리(회색)는 가리지 않게 했고, 1080×1920을 1/4로 줄인 그림입니다.</p>
+
+<section class="kind"><h2>① 연예인 핫 <span class="tag">Claude</span></h2><div class="pair">
+  <div class="card"><div class="wrap"><div class="f c1a">
+    <div class="band"><div class="kick">STAGE · 공식 채널</div><div class="t">이 표정 보고<br><em>안나</em>한테 입덕</div></div>
+    <div class="vid"></div><div class="abs cap">엔딩 요정 미쳤다</div><div class="abs src">♪ @official</div>
+  </div></div><h3>A. 무대 조명</h3><p>검은 띠 위에서 조명이 내려오는 느낌. 이름은 분홍→주황 그라데이션 글자, 자막은 분홍 빛 번짐.</p></div>
+  <div class="card"><div class="wrap"><div class="f c1b">
+    <div class="vid"></div><div class="abs fade"></div><div class="abs src">OFFICIAL · LIVE</div>
+    <div class="abs t">이 표정 보고<br><em>안나</em> 입덕함</div>
+    <div class="abs cap"><span>엔딩 요정 미쳤다</span></div>
+  </div></div><h3>B. 응원봉 테두리</h3><p>띠 없이 영상을 꽉 채우고 위쪽만 어둡게. 이름은 보라 빛 응원봉 테두리, 자막 아래 보라 밑줄.</p></div>
+</div></section>
+
+<section class="kind"><h2>② 해외 꿀잼 <span class="tag">Claude</span></h2><div class="pair">
+  <div class="card"><div class="wrap"><div class="f c2a">
+    <div class="band"><div class="flag">🇺🇸 원본 채널</div><div class="t">드럼 배틀 실화냐</div></div>
+    <div class="vid"></div><div class="abs ksub"><span>"잠깐, 지금 발로 치는 거야?"</span></div>
+  </div></div><h3>A. 입체 글자</h3><p>짙은 청록 띠에 주황 그림자가 층층이 쌓인 입체 제목. 번역 자막은 검은 칸에 노란 글씨.</p></div>
+  <div class="card"><div class="wrap"><div class="f c2b">
+    <div class="band"><div class="t"><small>미국 · 원작자 영상</small>드럼 배틀<br>끝난 줄 알았지</div></div>
+    <div class="abs stamp">실화</div>
+    <div class="vid"></div><div class="abs pop">ㅋㅋㅋㅋㅋ</div>
+    <div class="abs ksub"><span>"잠깐, 지금 발로 치는 거야?"</span></div>
+  </div></div><h3>B. 빨간 도장</h3><p>흰 띠에 굵은 검은 제목 + 빨간 원 도장('실화'·'레전드'). 자막은 흰 카드에 검은 그림자.</p></div>
+</div></section>
+
+<section class="kind"><h2>③ 썰 (새 탭) <span class="tag g">GPT</span></h2><div class="pair">
+  <div class="card"><div class="wrap"><div class="f c3a">
+    <div class="abs no">썰 · 회사편</div><div class="abs q">“</div>
+    <div class="abs prev">소개팅 나갔는데<br>목소리가 너무 익숙한 거야</div>
+    <div class="abs now">고개 들었더니<br><span>우리 팀장</span>이 앉아 있음</div>
+    <div class="abs bar"><i></i></div>
+  </div></div><h3>A. 큰 글자 낭독</h3><p>검은 화면에 지금 읽는 줄만 크게, 지난 줄은 회색으로 위에. 아래 진행 막대로 끝까지 보게.</p></div>
+  <div class="card"><div class="wrap"><div class="f c3b">
+    <div class="abs t">소개팅 상대가<br>우리 팀장이었던 썰</div>
+    <div class="abs p p1">처음엔 진짜 못 알아봤어</div>
+    <div class="abs p p2">근데 "어… 김 대리?" 하는 순간</div>
+    <div class="abs p p3">둘 다 메뉴판만 봄</div>
+  </div></div><h3>B. 포스트잇</h3><p>하늘색 바탕에 색 포스트잇이 한 장씩 붙으며 이야기가 진행. 다음 장은 흐리게 미리 보임.</p></div>
+</div></section>
+
+<section class="kind"><h2>④ 주제·정보 <span class="tag g">GPT</span></h2><div class="pair">
+  <div class="card"><div class="wrap"><div class="f c4a">
+    <div class="vid"></div><div class="abs t">연말정산<br>놓치기 쉬운 것</div>
+    <div class="abs list">
+      <div class="row done"><div class="box">✓</div>월세 세액공제</div>
+      <div class="row now"><div class="box"></div>안경·렌즈 의료비</div>
+      <div class="row"><div class="box"></div>기부금 이월</div>
+    </div>
+  </div></div><h3>A. 체크리스트</h3><p>위는 그림, 아래는 흰 체크리스트 판. 지나간 항목은 체크·줄긋기, 지금 항목은 파랑.</p></div>
+  <div class="card"><div class="wrap"><div class="f c4b">
+    <div class="vid"></div><div class="abs n">2</div>
+    <div class="abs t"><small>연말정산 꿀팁</small>안경값도<br>의료비 공제</div>
+    <div class="abs lower">1인당 50만 원까지 됩니다</div>
+  </div></div><h3>B. 큰 숫자</h3><p>몇 번째 포인트인지 큰 노란 테두리 숫자로. 핵심 한 줄은 아래 노란 띠.</p></div>
+</div></section>
+
+<section class="kind"><h2>⑤ 내 사진·자료 <span class="tag g">GPT</span></h2><div class="pair">
+  <div class="card"><div class="wrap"><div class="f c5a">
+    <div class="abs t">강릉 커피축제 다녀옴</div>
+    <div class="abs strip"><div class="abs holes l"></div><div class="abs holes r"></div><div class="vid"></div></div>
+    <div class="abs date">'26 10 12</div>
+    <div class="abs cap">줄은 길었는데 라떼는 진짜였다</div>
+  </div></div><h3>A. 필름</h3><p>사진을 필름 칸에 끼우고 오른쪽 아래에 필름 카메라식 주황 날짜. 글자는 부드러운 명조.</p></div>
+  <div class="card"><div class="wrap"><div class="f c5b">
+    <div class="vid"></div><div class="abs t">📍 강릉 안목해변</div>
+    <div class="abs paper"></div><div class="abs stk">추천</div>
+    <div class="abs cap"><small>10월 둘째 주</small>줄은 길었는데<br>라떼 하나는 진짜</div>
+  </div></div><h3>B. 다이어리 스크랩</h3><p>사진은 꽉 채우고 아래를 찢은 종이로. 손글씨 캡션 + 동그란 스티커(추천·맛집 등).</p></div>
+</div></section>
+
+<section class="kind"><h2>⑥ 캐릭터 <span class="tag g">GPT</span></h2><div class="pair">
+  <div class="card"><div class="wrap"><div class="f c6a">
+    <div class="abs s1"></div><div class="abs s2"></div>
+    <div class="abs t">아이폰 쓰는 사람 특</div>
+    <div class="abs who"></div>
+    <div class="abs cap"><span>"C타입 없는데?"</span></div>
+  </div></div><h3>A. 색종이</h3><p>민트 바탕에 색종이 도형, 캐릭터는 가운데. 제목은 두꺼운 외곽선, 대사는 흰 카드.</p></div>
+  <div class="card"><div class="wrap"><div class="f c6b">
+    <div class="abs t"><span>아이폰</span> 쓰는<br>사람 특</div>
+    <div class="abs chat"><div><b>친구</b>충전기 있어?</div><div><b>친구</b>C타입으로</div></div>
+    <div class="abs say">"C타입 없는데?"<br>(3년째)</div>
+    <div class="abs who"></div>
+  </div></div><h3>B. 채팅 반응</h3><p>보라 밤 배경, 왼쪽에 상대 채팅이 쌓이고 캐릭터 대사는 노란 말풍선.</p></div>
+</div></section>
+</body>
+</html>

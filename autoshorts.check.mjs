@@ -1,13 +1,14 @@
 // npm run check: 쇼츠 자동화 후보 거르기
 import assert from 'node:assert/strict';
 import { pickFresh, AUTO_CATS, weekSearchUrl } from './autoshorts.mjs';
-const v = (id, o = {}) => ({ id, title: `t${id}`, channel: 'c', duration: 60, views: 10, verified: false, ...o });
-const list = [v('a', { views: 5 }), v('b', { views: 50 }), v('c', { title: 'Funniest compilation' }), v('d', { duration: 5 }), v('e', { duration: 3600 }), v('b'), v('u', { views: 999 })];
+const v = (id, o = {}) => ({ id, title: `t${id}`, channel: 'c', duration: 60, views: 20000, verified: false, ...o });
+const list = [v('a', { views: 15000 }), v('b', { views: 50000 }), v('c', { title: 'Funniest compilation' }), v('d', { duration: 5 }), v('e', { duration: 3600 }), v('b'), v('u', { views: 99900 })];
 const got = pickFresh(list, AUTO_CATS.comedy, new Set(['u']), 3).map((x) => x.id);
 assert.deepEqual(got, ['b', 'a']); // 조회수 순, 모음·너무 짧은/긴 것·이미 쓴 것·중복 제외
 assert.deepEqual(pickFresh([v('x'), v('y', { verified: true })], AUTO_CATS.kpop, new Set(), 2).map((x) => x.id), ['y']); // 연예인은 인증 채널만
 assert.match(weekSearchUrl('a b'), /search_query=a%20b&sp=EgIIAw%253D%253D$/);
 assert.deepEqual(pickFresh([v('p', { title: 'Trump Spins Over Midterm Defeat' }), v('q', { title: 'Grammy award drummer' })], AUTO_CATS.talkshow, new Set(), 2).map((x) => x.id), ['q']); // 정치·뉴스 제외, award는 통과
+assert.deepEqual(pickFresh([v('lo', { views: 389 }), v('mv', { title: 'Cat & Dog Official MV' }), v('ok')], AUTO_CATS.animals, new Set(), 3).map((x) => x.id), ['ok']); // 조회수 낮은 것·뮤직비디오 제외
 console.log('autoshorts.check ok');
 
 // 업로드 txt·폴더 분류

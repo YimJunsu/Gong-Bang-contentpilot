@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 import { buildVoice, renderScene, sfx, ffmpeg, duration, FONT_CHOICES } from './video.mjs';
 import { charDir, wrapCaption } from './character.mjs';
+import { LOOKS } from './shorts-kinds.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FONTS = path.join(HERE, 'assets', 'fonts');
@@ -52,7 +53,9 @@ export async function renderCharacter(dir, script, { root, tts = {}, voice = '',
   const clips = [];
   try {
     for (const [i, scene] of script.scenes.entries()) {
-      const data = { ...charSceneData(scene, voices[i], poses, fonts, dir), index: i + 1 };
+      // 컨셉 꾸미기(look): 위 제목 + (채팅 반응) 앞 장면 대사 이어 보기
+      const history = script.scenes.slice(0, i).flatMap((s) => s.lines.map((l) => wrapCaption(l.text))).slice(-2);
+      const data = { ...charSceneData(scene, voices[i], poses, fonts, dir), index: i + 1, look: LOOKS.character.includes(script.look) ? script.look : '', title: (script.title || [])[0] || '', history };
       const t0 = Date.now();
       // 장면 사이 '휙' 소리는 두 번째 장면부터(renderScene이 index로 판단)
       clips.push(await renderScene(browser, data, voices[i].voice, sounds, path.join(work, `scene-${String(i + 1).padStart(2, '0')}.mp4`), log, STAGE));

@@ -4,7 +4,7 @@ import { Tour, TOURS, TOUR_OF_TAB, TourContext } from './tour';
 import { DialogProvider, useDialog } from './dialog';
 import { createPortal } from 'react-dom';
 import { TITLE_STYLES, TITLE_FONTS, CLIP_STYLES, KIND_DEFAULTS } from '../title-styles.mjs';
-import { SHORT_KINDS, LENGTH_NAMES, lengthText, kindOf, uploadTitle, hashtagsOf } from '../shorts-kinds.mjs';
+import { SHORT_KINDS, AI_GROUPS, aiOfKind, LENGTH_NAMES, lengthText, kindOf, uploadTitle, hashtagsOf } from '../shorts-kinds.mjs';
 import Campaigns from './campaigns';
 
 // 서버(server.mjs)는 x-bh 헤더가 없는 POST를 막는다 (다른 사이트발 요청 차단)
@@ -20,14 +20,17 @@ const when = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR', { month: 'num
 // 아이콘은 Fluent 3D 이모지만 쓴다 (public/emoji, MIT). 장식이라 alt는 비운다
 const Emoji = ({ name, size = 22 }) => <img className="emoji" src={`/emoji/${name}.png`} width={size} height={size} alt="" draggable={false} />;
 
+// 메뉴는 하는 일(블로그 / 숏폼) 기준으로 묶는다(2026-11-20 사용자 결정). 맨 아래 묶음(group '')은 구분선 아래
 const MENU = [
-  { group: null, items: [['home', '대시보드', 'chart']] },
-  { group: '찾기', items: [['reward', '핫 키워드', 'fire'], ['shortents', '숏텐츠', 'news'], ['campaigns', '체험단 정보 조회', 'news']] },
-  { group: '만들기', items: [['write', '글 생성하기', 'memo'], ['shortform', '숏폼', 'clapper'], ['character', '캐릭터 숏폼', 'sparkles']] },
-  { group: '자동화', items: [['autoshorts', '쇼츠 자동화', 'rocket'], ['visits', '댓글 답방', 'check'], ['auto', '글 자동화', 'robot'], ['insta', '인스타 자동화', 'camera'], ['threads', '스레드 자동화', 'sparkles']] },
-  { group: '관리', items: [['posts', '글 목록', 'books'], ['jobs', '작업 로그', 'clipboard'], ['settings', '설정', 'gear']] }
+  { group: null, items: [['home', '홈', 'chart']] },
+  { group: '블로그', items: [['topics', '주제 찾기', 'fire'], ['write', '글 쓰기', 'memo'], ['posts', '글 목록', 'books'], ['campaigns', '체험단', 'news'], ['visits', '댓글 답방', 'check']] },
+  { group: '숏폼', items: [['shortform', '만들기', 'clapper'], ['autoshorts', '자동 만들기', 'rocket'], ['shortlist', '만든 영상', 'clapper']] },
+  { group: '도구', items: [['extract', 'mp3·mp4 추출기', 'clapper']] },
+  { group: '', items: [['soon', '곧 나와요', 'sparkles'], ['jobs', '작업 로그', 'clipboard'], ['settings', '설정', 'gear']] }
 ];
-const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비', poses: '캐릭터 포즈', autoshorts: '쇼츠 자동화', character: '캐릭터 숏폼' };
+// 예전 메뉴 주소(알림·저장된 탭·투어) → 지금 화면
+const OLD_TAB = { reward: 'topics', shortents: 'topics', character: 'shortform', shorts: 'shortform', reel: 'shortform', clip: 'shortform', auto: 'soon', insta: 'soon', threads: 'soon' };
+const TYPE = { write: '글 생성', draft: '임시저장', discover: '수집·추천', scrape: '화면 읽기', shorts: '숏폼 생성', reel: '릴스·쇼츠 생성', render: '숏폼 렌더링', clip: '클립 숏폼', visit: '답방 준비', poses: '캐릭터 포즈', autoshorts: '쇼츠 자동화', character: '캐릭터 숏폼', extract: 'mp3·mp4 추출' };
 const STATUS = { running: ['hourglass', '진행 중'], done: ['check', '완료'], failed: ['cross', '실패'] };
 
 // 오래 걸리는 일(새로고침·로그인 창·세션 확인)은 다른 화면에 다녀와도 '진행 중'이 남아야 한다.
@@ -255,7 +258,8 @@ export default function Page() {
     wide.addEventListener('change', shut);
     return () => { window.removeEventListener('keydown', esc); wide.removeEventListener('change', shut); menuBtn.current?.focus(); };
   }, [menuOpen]);
-  const tabName = MENU.flatMap((g) => g.items).find(([id]) => id === tab)?.[1] || '';
+  const menuTab = OLD_TAB[tab] || tab;
+  const tabName = MENU.flatMap((g) => g.items).find(([id]) => id === menuTab)?.[1] || '';
   const [tour, setTour] = useState(null);
   const startTour = useCallback((id) => setTour(id || TOUR_OF_TAB[tab] || 'home'), [tab]);
   const endTour = (finished) => {
@@ -274,21 +278,23 @@ export default function Page() {
 
   const views = {
     home: <Home state={state} posts={posts} running={running} reload={loadState} startJob={startJob} pickTopic={pickTopic} go={go} />,
-    reward: <HotKeywords startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} go={go} />,
-    shortents: <Shortents startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} />,
+    topics: <Topics startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} go={go} />,
     visits: <Visits />,
     campaigns: <Campaigns api={api} Action={Action} Head={Head} />,
-    auto: <Soon id="auto" title="글 자동화" desc="정해진 시간마다 숏텐츠·핫 키워드에서 좋은 주제를 골라 글까지 자동으로 만듭니다">지금은 글 생성하기나 숏텐츠의 "이걸로 글쓰기"로 한 편씩 만들 수 있습니다.</Soon>,
-    insta: <Soon id="insta" title="인스타 자동화" desc="만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
-    threads: <Soon id="threads" title="스레드 자동화" desc="만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올리는 기능입니다">아직 만들기 전입니다. 기능이 정해지면 이 화면에서 쓸 수 있습니다.</Soon>,
+    soon: <Soon />,
+    extract: <Extractor jobs={jobs} startJob={startJob} />,
     write: <Write draft={draft} setDraft={setDraft} engine={state?.config?.engine} startJob={startJob} categories={state?.categories || []} hasRules={state?.hasRules} naver={naverOf(state?.config)} rootOk={state?.rootOk} root={state?.root} go={go} />,
     autoshorts: <AutoShorts jobs={jobs} startJob={startJob} go={go} config={state?.config} reload={loadState} />,
-    character: <Character jobs={jobs} startJob={startJob} go={go} />,
-    shortform: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} />,
-    // 예전 메뉴 주소(알림·저장된 탭)는 숏폼의 해당 탭으로
-    shorts: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="material" />,
-    reel: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="topic" />,
-    clip: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} initialTab="celeb" />,
+    shortform: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} go={go} />,
+    shortlist: <ShortList startJob={startJob} jobs={jobs} go={go} />,
+    // 예전 메뉴 주소(알림·저장된 탭)는 지금 화면의 해당 탭으로
+    reward: <Topics startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} go={go} initialTab="hot" />,
+    shortents: <Topics startJob={startJob} pickTopic={pickTopic} engine={state?.config?.engine} go={go} initialTab="shortents" />,
+    auto: <Soon />, insta: <Soon />, threads: <Soon />,
+    character: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} go={go} initialTab="character" />,
+    shorts: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} go={go} initialTab="material" />,
+    reel: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} go={go} initialTab="topic" />,
+    clip: <ShortsHub config={state?.config} reload={loadState} startJob={startJob} jobs={jobs} go={go} initialTab="celeb" />,
     posts: <Posts posts={posts} startJob={startJob} categories={state?.categories || []} naver={naverOf(state?.config)} reload={() => { loadPosts().catch(() => {}); loadState().catch(() => {}); }} />,
     jobs: <Jobs jobs={jobs} reload={loadJobs} />,
     settings: state && <Settings config={state.config} sessions={state.accounts || {}} loggingIn={state.loggingIn} reload={loadState} />
@@ -310,10 +316,10 @@ export default function Page() {
         <div className="side-menu">
         <div className="brand">공방-콘텐츠파일럿</div>
         {MENU.map(({ group, items }) => (
-          <div key={group || 'top'}>
+          <div key={group ?? 'top'} className={group === '' ? 'nav-foot' : undefined}>
             {group && <div className="group">{group}</div>}
             {items.map(([id, name]) => (
-              <button key={id} className={`nav${tab === id ? ' on' : ''}`} onClick={() => go(id)} aria-current={tab === id ? 'page' : undefined}>
+              <button key={id} className={`nav${menuTab === id ? ' on' : ''}`} onClick={() => go(id)} aria-current={menuTab === id ? 'page' : undefined}>
                 {name}
                 {id === 'jobs' && running > 0 && <span className="count">{running}</span>}
               </button>
@@ -463,7 +469,7 @@ function Write({ draft, setDraft, engine: defaultEngine, startJob, categories, h
 
   return (
     <>
-      <Head title="글 생성하기" desc="주제와 참고 자료를 주면 블로그 폴더 규칙(AGENTS.md)대로 한 편을 씁니다. 원하면 네이버 임시저장까지 합니다" />
+      <Head title="글 쓰기" desc="주제와 참고 자료를 주면 블로그 폴더 규칙(AGENTS.md)대로 한 편을 씁니다. 원하면 네이버 임시저장까지 합니다" />
       {folder.rootOk === false && (
         <p className="note" style={{ marginBottom: 18 }}>이 계정의 작업 폴더가 지정되지 않았거나 없어 글을 쓸 수 없습니다. <a href="#" onClick={(e) => { e.preventDefault(); go('settings'); }}>설정</a>에서 기본 작업 폴더나 계정별 작업 폴더(예: D:\BLOG\내블로그)를 지정하세요.</p>
       )}
@@ -740,8 +746,36 @@ function Jobs({ jobs, reload }) {
 }
 
 // ---- 숏폼 만들기 ----
+// 썰(ChatGPT): 참고 글 붙여넣기(선택) + 말투 → 대본 → 장면마다 그림 → 확대·슬라이드 전환 영상.
+// 커뮤니티 글은 자동으로 긁지 않는다(더쿠·네이트판 robots.txt가 막음, 2026-11-22 확인) — 사람이 읽고 붙여 넣은 글만 바꿔 쓴다
+const SSUL_VOICES = [['theqoo', '더쿠체', '~함·~임 수다'], ['pann', '판체', '~했어요 사연'], ['friend', '친구한테', '야 들어봐'], ['radio', '라디오 사연', '차분한 낭독']];
+function SsulForm({ config, reload, startJob }) {
+  const [length, setLength] = useSticky('shorts-length-ssul', 'normal');
+  const [voice, setVoice] = useSticky('ssul-voice', 'theqoo');
+  const [form, setForm] = useState({ topic: '', source: '' });
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const submit = async () => {
+    await startJob({ type: 'reel', kind: 'ssul', topic: form.topic.trim(), source: form.source.trim().slice(0, 6000), voice, length }, { stay: true });
+    setForm({ topic: '', source: '' });
+  };
+  const empty = !form.topic.trim() && !form.source.trim();
+  return (
+    <section className="panel">
+      <label className="field"><span>썰 주제</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder="비워 두면 요즘 화제에서 반응 좋을 썰을 골라 씁니다 · 예: 소개팅 상대가 팀장" /></label>
+      <label className="field"><span>참고 글 붙여넣기</span><textarea value={form.source} onChange={set('source')} placeholder="더쿠·네이트판 등에서 직접 읽고 복사한 글을 붙여 넣으세요. 그대로 옮기지 않고 이야기 뼈대만 가져와 새로 씁니다" /><small>글을 자동으로 가져오지는 않습니다(두 사이트 모두 자동 수집을 막아 둠). 실명·아이디는 지우고 씁니다.</small></label>
+      <div className="field"><span>말투</span>
+        <div className="segment" role="group" aria-label="말투">
+          {SSUL_VOICES.map(([id, name, d]) => <button key={id} type="button" className={voice === id ? 'on' : ''} onClick={() => setVoice(id)}>{name} <span className="n">{d}</span></button>)}
+        </div>
+      </div>
+      <LengthPick kind="ssul" value={length} onChange={setLength} />
+      <VoiceSettings config={config} reload={reload} />
+      <div className="row" style={{ marginTop: 14 }}><Action primary big run={submit}>만들기 시작</Action><span className="muted">{empty ? '빈 칸이면 주제부터 AI가 정합니다. ' : ''}대본 → 장면 그림 → 확대·슬라이드 영상까지 10분 안팎</span></div>
+    </section>
+  );
+}
+
 function Reel({ config, reload, startJob }) {
-  const [look, setLook] = useSticky('shorts-look-topic', KIND_DEFAULTS.topic);
   const [length, setLength] = useSticky('shorts-length-topic', 'normal');
   const [topic, setTopic] = useState('');
   const [narration, setNarration] = useState('');
@@ -752,7 +786,6 @@ function Reel({ config, reload, startJob }) {
   const [note, setNote] = useState('');
   const recommend = async () => setSuggestions(await post('/api/reel/topics', { interest, style }));
   const submit = async () => {
-    if (!topic.trim()) throw new Error('주제를 입력해 주세요');
     if (files.length > 8) throw new Error('이미지와 영상은 최대 8개까지 넣을 수 있습니다');
     if (files.some((f) => !/\.(jpe?g|png|webp|gif|mp4|webm)$/i.test(f.name))) throw new Error('JPG, PNG, WEBP, GIF, MP4, WEBM 파일만 넣어 주세요');
     const batch = Date.now().toString(36);
@@ -762,7 +795,7 @@ function Reel({ config, reload, startJob }) {
       paths.push((await api(`/api/upload?batch=${batch}&name=${encodeURIComponent(`${i + 1}-${file.name}`)}`, { method: 'POST', body: file })).path);
     }
     setNote('');
-    await startJob({ type: 'reel', topic: topic.trim(), narration: narration.trim(), style, length, titleFont: look.font, titleStyle: look.titleStyle, files: paths }, { stay: true });
+    await startJob({ type: 'reel', kind: 'topic', topic: topic.trim(), narration: narration.trim(), style, length, files: paths }, { stay: true });
     setTopic(''); setNarration(''); setFiles([]);
   };
   return <>
@@ -773,11 +806,10 @@ function Reel({ config, reload, startJob }) {
         {suggestions.topics.map((item) => <button type="button" className="btn" style={{ textAlign: 'left', whiteSpace: 'normal', marginBottom: 6 }} key={item.topic} onClick={() => setTopic(item.topic)}><b>{item.topic}</b>{item.reason && <> · {item.reason}</>}</button>)}
         <small>저장된 핫 키워드 기준 {suggestions.hotDate || '없음'} · 숏텐츠 수집 {suggestions.shortFetchedAt ? when(suggestions.shortFetchedAt) : '없음'}. AI가 제안한 주제입니다.</small>
       </div>}
-      <label className="field"><span>영상 주제 (필수)</span><input className="topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="예: 커피를 마시면 잠이 깨는 이유" /></label>
+      <label className="field"><span>영상 주제</span><input className="topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="비워 두면 요즘 화제에서 조회수 잘 나올 주제를 골라 만듭니다" /></label>
       <label className="field"><span>영상 형식</span><select value={style} onChange={(e) => setStyle(e.target.value)}><option value="info">정보 알려주기</option><option value="story">이야기 들려주기</option></select></label>
       <label className="field"><span>직접 쓴 대본 (선택)</span><textarea value={narration} onChange={(e) => setNarration(e.target.value)} placeholder="비워 두면 주제에 맞춰 대본을 만듭니다" /><small>입력한 대본은 그대로 읽습니다.</small></label>
       <div className="field"><span>직접 넣을 이미지·영상 (선택)</span><FilePick files={files} setFiles={setFiles} accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.webm" hint="이미지나 영상 최대 8개 · JPG, PNG, WEBP, GIF, MP4, WEBM" /><small>첨부한 순서대로 장면에 사용합니다. 첨부하지 않으면 Codex가 이미지를 만듭니다.</small></div>
-      <LookPick kind="topic" value={look} onChange={setLook} />
       <LengthPick kind="topic" value={length} onChange={setLength} />
       <VoiceSettings config={config} reload={reload} />
       <div className="note">{files.length ? '직접 넣은 이미지·영상을 사용합니다.' : 'Codex로 장면별 이미지를 생성합니다.'} 작업에 시간이 걸릴 수 있습니다.</div>
@@ -802,24 +834,22 @@ function ClipForm({ startJob, kind = 'celeb' }) {
   const viral = kind === 'viral';
   const [form, setForm] = useState({ topic: '', notes: '', links: '', mute: false });
   const [length, setLength] = useSticky(`shorts-length-${kind}`, 'normal');
-  const [look, setLook] = useSticky(`shorts-look-${kind}`, KIND_DEFAULTS[kind]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
   const submit = async () => {
     const urls = linksOf(form.links);
-    if (!form.topic.trim()) throw new Error(viral ? '분야나 키워드를 입력해 주세요' : '인물이나 화제를 입력해 주세요');
     if (urls.length > 3) throw new Error('영상 주소는 3개까지 넣을 수 있습니다');
-    await startJob({ type: 'clip', kind, length, titleFont: look.font, clipStyle: look.clipStyle, topic: form.topic.trim(), notes: form.notes.trim(), urls, mute: form.mute }, { stay: true });
+    // 꾸미기는 컨셉마다 하나로 고정(title-styles.mjs KIND_DEFAULTS, 2026-11-22) — 화면에서 고르지 않는다
+    await startJob({ type: 'clip', kind, length, topic: form.topic.trim(), notes: form.notes.trim(), urls, mute: form.mute }, { stay: true });
     setForm((f) => ({ ...f, topic: '', notes: '', links: '' }));
   };
   return (
     <section className="panel">
-      <label className="field"><span>{viral ? '분야·키워드 (필수)' : '인물·화제 (필수)'}</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder={viral ? '예: drummer funny moment, dog surprised, 콘서트 레전드' : '예: 미야오 안나 직캠, 지수 대기실'} />{viral && <small>영어로 넣으면 해외 원본이 더 잘 나옵니다. 모음·재업로드·리액션 채널은 빼고 원작자 채널 영상만 고릅니다.</small>}</label>
+      <label className="field"><span>{viral ? '분야·키워드' : '인물·화제'}</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder={viral ? '비워 두면 요즘 뜨는 해외 영상을 골라 만듭니다 · 예: drummer funny moment' : '비워 두면 요즘 뜨는 무대·예능 영상을 골라 만듭니다 · 예: 미야오 안나 직캠'} />{viral ? <small>영어로 넣으면 해외 원본이 더 잘 나옵니다. 모음·재업로드·리액션 채널은 빼고 원작자 채널 영상만 고릅니다. 한국어 해설 목소리로 소개하고, 결정적 순간은 원본 소리로 보여 줍니다.</small> : <small>한 사람 화제면 예능·인터뷰·무대를 이야기 순서로 섞고, '관객 난입 레전드'처럼 주제를 넣으면 TOP 모음으로 만듭니다.</small>}</label>
       <label className="field"><span>메모 (선택)</span><textarea value={form.notes} onChange={set('notes')} placeholder={viral ? '예: 마지막 반응 장면 위주로, 제목은 공감형으로' : "예: 표정 위주로, 'GO HARD' 무대만, 제목은 반전형으로"} /></label>
       <label className="field"><span>원본 영상 주소 (선택, 3개까지)</span><textarea value={form.links} onChange={set('links')} placeholder={viral ? 'https://youtu.be/...  비워 두면 원작자 채널에서 찾습니다' : 'https://youtu.be/...  비워 두면 인증(공식) 채널에서 찾습니다'} /><small>남의 영상을 쓰므로 저작권 신고를 받을 수 있습니다. 공식 채널 영상을 짧게, 출처를 붙여 씁니다.</small></label>
-      <LookPick kind={kind} value={look} onChange={setLook} />
       <LengthPick kind={kind} value={length} onChange={setLength} />
       <label className="row" style={{ marginBottom: 6 }}><input type="checkbox" checked={form.mute} onChange={set('mute')} /><span>원본 소리 끄기 <span className="muted">— 음악은 업로드할 때 유튜브에서 고릅니다(저작권 신고가 줄어듭니다)</span></span></label>
-      <div className="row" style={{ marginTop: 14 }}><Action primary big run={submit}>만들기 시작</Action><span className="muted">원본 받기·AI 구간 고르기·렌더링까지 몇 분 걸립니다. 아래 목록에서 진행이 보입니다.</span></div>
+      <div className="row" style={{ marginTop: 14 }}><Action primary big run={submit}>만들기 시작</Action><span className="muted">{form.topic.trim() || form.links.trim() ? '원본 받기·AI 구간 고르기·렌더링까지 몇 분 걸립니다.' : '빈 칸이면 조회수 순으로 요즘 뜨는 새 영상을 찾아 만듭니다(한 번 쓴 영상은 다시 안 씀).'}</span></div>
     </section>
   );
 }
@@ -829,7 +859,7 @@ const plainTitle = (s) => (s.script ? uploadTitle(s.script) : '');
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); } catch { throw new Error('복사하지 못했습니다. 글을 직접 선택해 복사해 주세요'); }
 }
-const jobKind = (j) => (j.type === 'clip' ? (j.input.kind === 'viral' ? 'viral' : 'celeb') : j.type === 'reel' ? 'topic' : j.type === 'shorts' ? 'material' : j.type === 'character' ? 'character' : null);
+const jobKind = (j) => (j.type === 'clip' ? (j.input.kind === 'viral' ? 'viral' : 'celeb') : j.type === 'reel' ? (j.input.kind === 'ssul' ? 'ssul' : 'topic') : j.type === 'shorts' ? 'material' : j.type === 'character' ? 'character' : null);
 function ShortBoard({ startJob, jobs, kind }) {
   const [shortList, load] = useApiData('/api/shorts');
   const [filter, setFilter] = useSticky('shorts-board-filter', 'todo');
@@ -838,8 +868,8 @@ function ShortBoard({ startJob, jobs, kind }) {
   const [ytUrl, setYtUrl] = useState('');
   const doneCount = jobs.filter((j) => ['clip', 'reel', 'shorts', 'render', 'character'].includes(j.type) && j.status !== 'running').length;
   useEffect(() => { load(); }, [load, doneCount]);
-  const making = jobs.filter((j) => j.status === 'running' && jobKind(j) === kind);
-  const all = (shortList || []).filter((s) => s.script && kindOf(s.script) === kind);
+  const making = jobs.filter((j) => j.status === 'running' && jobKind(j) && (!kind || jobKind(j) === kind));
+  const all = (shortList || []).filter((s) => s.script && (!kind || kindOf(s.script) === kind));
   const list = filter === 'todo' ? all.filter((s) => !s.script.uploaded) : all;
   const cur = list.find((s) => s.dir === open) || list[0];
   useEffect(() => { setYtUrl(cur?.script?.uploaded?.url || ''); }, [cur?.dir, cur?.script?.uploaded?.url]);
@@ -864,7 +894,7 @@ function ShortBoard({ startJob, jobs, kind }) {
               {s.script.uploaded ? <span className="status done"><Emoji name="check" size={16} />올림</span> : s.video ? <span className="clip-todo">올릴 차례</span> : <span className="muted">영상 없음</span>}</div>
           </button>
         ))}
-        {!making.length && !list.length && <Empty title={filter === 'todo' ? '올릴 차례인 편이 없습니다' : '아직 만든 편이 없습니다'}>위에서 만들기를 시작해 보세요.</Empty>}
+        {!making.length && !list.length && <Empty title={filter === 'todo' ? '올릴 차례인 편이 없습니다' : '아직 만든 편이 없습니다'}>숏폼 → 만들기에서 시작해 보세요.</Empty>}
       </div>
       {cur && <div className="clip-detail">
         <h2 className="panel-title" style={{ marginBottom: 4 }}>{plainTitle(cur) || cur.name}</h2>
@@ -896,22 +926,71 @@ function ShortBoard({ startJob, jobs, kind }) {
   );
 }
 
-// 숏폼(만들기): 탭 4개 — ① 연예인 핫 ② 해외 재밌는 영상 ③ 주제·컨셉 ④ 내 사진·자료. 설계: docs/숏폼-통합-설계.md
-function ShortsHub({ config, reload, startJob, jobs, initialTab }) {
-  const [tab, setTab] = useSticky('shorts-tab', initialTab || 'celeb');
-  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
+// 숏폼 → 만들기: 종류 탭(① 연예인 핫 ② 해외 재밌는 영상 ③ 주제·컨셉 ④ 내 사진·자료 ⑤ 캐릭터). 설계: docs/숏폼-통합-설계.md
+// 만든 편은 '만든 영상' 화면에서 본다. 여기엔 그 종류에서 지금 만드는 것만 짧게
+const HUB_TABS = [...AI_GROUPS.claude.kinds, ...AI_GROUPS.gpt.kinds].map((id) => [id, SHORT_KINDS[id]]);
+// 맨 위 AI 고르기(2026-11-22): Claude = 원본 영상 편집(①②), ChatGPT = 대본·그림 생성(썰·주제·내 자료·캐릭터). 고른 쪽 탭만 보인다
+function AiToggle({ value, onChange }) {
+  return (
+    <div className="ai-toggle" role="radiogroup" aria-label="AI 고르기">
+      {Object.entries(AI_GROUPS).map(([id, g]) => (
+        <button key={id} type="button" role="radio" aria-checked={value === id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>
+          <b>{g.name}</b><span>{g.desc}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+function ShortsHub({ config, reload, startJob, jobs, initialTab, go }) {
+  const [ai, setAi] = useSticky('shorts-ai', initialTab ? aiOfKind(initialTab) : 'claude');
+  const [tabs, setTabs] = useSticky('shorts-tab-by-ai', { claude: 'celeb', gpt: 'ssul' });
+  useEffect(() => { if (initialTab) { setAi(aiOfKind(initialTab)); setTabs((t) => ({ ...t, [aiOfKind(initialTab)]: initialTab })); } }, [initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const kinds = AI_GROUPS[ai]?.kinds || AI_GROUPS.claude.kinds;
+  const tab = kinds.includes(tabs[ai]) ? tabs[ai] : kinds[0];
+  const setTab = (id) => setTabs((t) => ({ ...t, [ai]: id }));
   return (
     <>
       <style>{fontFaces}</style>
-      <Head title="숏폼" desc="유튜브 쇼츠·인스타 릴스용 세로 영상(1080×1920)을 만듭니다. 올리기는 직접 합니다" />
+      <Head title="숏폼 만들기" desc="유튜브 쇼츠·인스타 릴스용 세로 영상(1080×1920)을 만듭니다. 올리기는 직접 합니다" />
+      <AiToggle value={ai} onChange={setAi} />
       <div className="segment shorts-tabs" role="tablist" aria-label="숏폼 종류" style={{ marginBottom: 16 }}>
-        {Object.entries(SHORT_KINDS).map(([id, k], i) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{`${'①②③④'[i]} ${k.name}`}</button>)}
+        {kinds.map((id, i) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{`${'①②③④⑤'[i]} ${SHORT_KINDS[id].name}`}</button>)}
       </div>
       {tab === 'celeb' && <ClipForm startJob={startJob} kind="celeb" />}
       {tab === 'viral' && <ClipForm startJob={startJob} kind="viral" />}
+      {tab === 'ssul' && config && <SsulForm config={config} reload={reload} startJob={startJob} />}
       {tab === 'topic' && config && <Reel config={config} reload={reload} startJob={startJob} />}
       {tab === 'material' && config && <Shorts config={config} reload={reload} startJob={startJob} />}
-      <ShortBoard startJob={startJob} jobs={jobs} kind={tab} />
+      {tab === 'character' && <Character jobs={jobs} startJob={startJob} go={go} embedded />}
+      <MakingNow jobs={jobs} kind={tab} go={go} />
+    </>
+  );
+}
+
+// 만들기 화면 아래: 이 종류에서 지금 만드는 것 + '만든 영상'으로 가는 길
+function MakingNow({ jobs, kind, go }) {
+  const making = jobs.filter((j) => j.status === 'running' && jobKind(j) === kind);
+  return (
+    <section className="panel making-now">
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div>{making.length ? <><b>만드는 중 {making.length}편</b> <span className="muted">· {making.map((j) => j.input.topic || '숏폼').join(', ')}</span></> : <span className="muted">다 만들면 '만든 영상'에서 보고 제목·설명을 복사해 올리면 됩니다.</span>}</div>
+        <button className="btn" onClick={() => go('shortlist')}>만든 영상 보기</button>
+      </div>
+    </section>
+  );
+}
+
+// 숏폼 → 만든 영상: 모든 종류의 편 목록 → 보고 올리기
+function ShortList({ startJob, jobs }) {
+  const [kind, setKind] = useSticky('shortlist-kind', '');
+  return (
+    <>
+      <style>{fontFaces}</style>
+      <Head title="만든 영상" desc="만든 숏폼을 보고, 제목·설명을 복사해 직접 올린 뒤 [올렸어요]를 누르세요" />
+      <div className="segment shorts-tabs" role="tablist" aria-label="종류" style={{ marginBottom: 16 }}>
+        {[['', { name: '전체' }], ...HUB_TABS].map(([id, k]) => <button key={id || 'all'} type="button" role="tab" aria-selected={kind === id} className={kind === id ? 'on' : ''} onClick={() => setKind(id)}>{k.name}</button>)}
+      </div>
+      <ShortBoard startJob={startJob} jobs={jobs} kind={kind || null} />
     </>
   );
 }
@@ -951,9 +1030,12 @@ function ClipBandSample({ style, font }) {
 function LookPick({ kind, value, onChange }) {
   const clip = kind === 'celeb' || kind === 'viral';
   const set = (patch) => onChange({ ...value, ...patch });
+  // 글꼴·색 카드가 스무 장 가까이라 평소엔 접어 두고, 고른 것만 한 줄로 보여 준다
+  const styleName = clip ? CLIP_STYLES[value.clipStyle]?.name : value.titleStyle === 'auto' ? '자동' : TITLE_STYLES[value.titleStyle]?.name;
   return (
-    <>
-      <div className="field"><span>글꼴</span>
+    <details className="voice look" data-tour="shorts-fonts">
+      <summary>꾸미기 <span className="muted">· 글꼴 {TITLE_FONTS[value.font]?.name || '기본'} · 제목 색 {styleName || '기본'}</span></summary>
+      <div className="field" style={{ marginTop: 12 }}><span>글꼴</span>
         <div className="fontcards" role="radiogroup" aria-label="글꼴">
           {Object.entries(TITLE_FONTS).map(([id, f]) => (
             <button key={id} type="button" role="radio" aria-checked={value.font === id} className={`fontcard${value.font === id ? ' on' : ''}`} onClick={() => set({ font: id })}>
@@ -984,7 +1066,7 @@ function LookPick({ kind, value, onChange }) {
           </>}
         </div>
       </div>
-    </>
+    </details>
   );
 }
 function TitleSample({ style }) {
@@ -1086,7 +1168,6 @@ function ShortDialog({ short, onClose, startJob }) {
 function Shorts({ config, reload, startJob }) {
   const [length, setLength] = useSticky('shorts-length-material', 'normal');
   const [form, setForm] = useState({ topic: '', notes: '' });
-  const [look, setLook] = useSticky('shorts-look-material', KIND_DEFAULTS.material);
   const [engine, setEngine] = useState(config.engine || 'codex');
   const [note, setNote] = useState('');
   const [files, setFiles] = useState([]);
@@ -1095,7 +1176,7 @@ function Shorts({ config, reload, startJob }) {
   const submit = async () => {
     if (!form.topic.trim() && !files.length) throw new Error('주제나 자료 중 하나는 있어야 합니다');
     const paths = await uploadAll(files, setNote);
-    await startJob({ type: 'shorts', ...form, topic: form.topic.trim(), engine, length, titleFont: look.font, titleStyle: look.titleStyle, files: paths }, { stay: true });
+    await startJob({ type: 'shorts', ...form, topic: form.topic.trim(), engine, length, files: paths }, { stay: true });
     setForm((f) => ({ ...f, topic: '', notes: '' })); setFiles([]);
   };
 
@@ -1111,7 +1192,6 @@ function Shorts({ config, reload, startJob }) {
         </label>
         <div className="field"><span>자료</span><FilePick files={files} setFiles={setFiles} accept="image/*,video/*,.pdf" hint="사진·영상·PDF — 장면 배경과 내용으로 씁니다" /></div>
         </div>
-        <LookPick kind="material" value={look} onChange={setLook} />
         <LengthPick kind="material" value={length} onChange={setLength} />
         <div className="field"><span>AI 엔진</span><Engine value={engine} onChange={setEngine} /></div>
         <VoiceSettings config={config} reload={reload} />
@@ -1237,7 +1317,7 @@ function Settings({ config, sessions, loggingIn, reload }) {
   const set = (key) => (e) => { setSaved(''); setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })); };
   const save = async () => {
     const { blogRoot, engine, headless } = form;
-    await post('/api/config', { blogRoot, engine, headless, codexEffort: form.codexEffort || '', videoCapture: Boolean(form.videoCapture), notify: form.notify !== false, shortentsIntervalMin: Number(form.shortentsIntervalMin ?? 30) || 0 });
+    await post('/api/config', { blogRoot, engine, clipEngine: form.clipEngine || 'claude', headless, codexEffort: form.codexEffort || '', videoCapture: Boolean(form.videoCapture), notify: form.notify !== false, shortentsIntervalMin: Number(form.shortentsIntervalMin ?? 30) || 0 });
     setSaved('저장했습니다'); reload();
   };
   return (
@@ -1255,7 +1335,8 @@ function Settings({ config, sessions, loggingIn, reload }) {
       </section>
       <section className="panel" data-tour="settings-ai">
         <h2 className="panel-title">AI</h2>
-        <div className="field"><span>기본 엔진</span><Engine value={form.engine} onChange={(v) => { setSaved(''); setForm((f) => ({ ...f, engine: v })); }} /></div>
+        <div className="field"><span>기본 엔진</span><Engine value={form.engine} onChange={(v) => { setSaved(''); setForm((f) => ({ ...f, engine: v })); }} /><small>글 생성·썰 숏폼·캐릭터 숏폼(그림 만들기는 codex만 됩니다)</small></div>
+        <div className="field"><span>클립 숏폼 엔진</span><Engine value={form.clipEngine || 'claude'} onChange={(v) => { setSaved(''); setForm((f) => ({ ...f, clipEngine: v })); }} /><small>연예인 영상·해외 재밌는 영상·쇼츠 자동화에서 구간과 자막을 고를 때</small></div>
         <label className="field"><span>codex 생각 깊이</span>
           <select value={form.codexEffort || ''} onChange={set('codexEffort')}>
             <option value="">codex 설정 그대로</option>
@@ -1291,7 +1372,7 @@ const ago = (iso) => {
 const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '');
 const JOB_STATE = { running: '작성 중', done: '작성함', failed: '작성 실패' };
 
-function Shortents({ startJob, pickTopic, engine }) {
+function Shortents({ startJob, pickTopic, engine, tabs }) {
   const dialog = useDialog();
   const [data, load] = useApiData('/api/shortents');
   const [cat, setCat] = useSticky('shortents-cat', 'all');
@@ -1311,21 +1392,22 @@ function Shortents({ startJob, pickTopic, engine }) {
   const write = async (x) => {
     const ok = await dialog.confirm({
       title: '이 숏텐츠로 글을 쓸까요?',
-      message: `「${x.title}」\n숏텐츠 요약 화면을 참고 자료로 넘겨 백그라운드에서 씁니다. 이 화면에 그대로 있으면서 줄마다 진행 상태가 보이고, 다 쓰면 글 목록에서 임시저장할 수 있습니다.`,
+      message: `「${x.title}」\n숏텐츠 요약 화면을 참고 자료로 넘겨 백그라운드에서 씁니다. 이 화면에 그대로 있으면서 줄마다 진행 상태가 보이고, 다 쓰면 기본 네이버 계정에 임시저장까지 합니다(발행은 하지 않음).`,
       ok: '글쓰기 시작'
     });
     if (!ok) return;
-    await startJob({ type: 'write', topic: x.title, category: '', notes: `네이버 숏텐츠 [${x.category}] 주제`, engine, files: [], draft: false, sourceUrl: x.linkUrl, shortentsId: x.gdid }, { stay: true });
+    await startJob({ type: 'write', topic: x.title, category: '', notes: `네이버 숏텐츠 [${x.category}] 주제`, engine, files: [], draft: true, sourceUrl: x.linkUrl, shortentsId: x.gdid }, { stay: true });
     setTimeout(load, 800); // 작업이 이 숏텐츠에 연결되면 줄에 '작성 중'이 뜬다
   };
 
   return (
     <>
-      <Head title="숏텐츠" desc={data?.lastFetch
+      <Head title="주제 찾기" desc={data?.lastFetch
         ? `${clock(data.lastFetch)}에 받음${data.intervalMin ? ` · ${data.intervalMin}분마다 자동 · 다음 ${clock(data.nextFetch)}` : ' · 자동 조회 꺼짐'}`
         : '네이버 검색창 숏텐츠와 분류별 숏텐츠를 모아 둡니다'}>
         <Action loading track="shortents-refresh" busy={refreshing} run={() => post('/api/shortents/refresh')}>지금 새로고침</Action>
       </Head>
+      {tabs}
       {data?.lastError && <p className="note" style={{ marginBottom: 14 }}>{data.lastError}</p>}
       <section className="panel" data-tour="shortents-list">
         <div className="toolbar" data-tour="shortents-filter">
@@ -1346,7 +1428,7 @@ function Shortents({ startJob, pickTopic, engine }) {
                 <td style={{ width: 76 }}>{x.imageUrl ? <img className="thumb" src={x.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <div className="thumb" />}</td>
                 <td>
                   <div className="title-cell">
-                    <span className="cat">{x.category}</span>{x.title}
+                    <span className="cat">{x.category}</span><a className="plain-link" href={x.linkUrl} target="_blank" rel="noreferrer" title="네이버에서 보기">{x.title}</a>
                     {x.isNew && <span className="pill new">NEW</span>}
                   </div>
                   {x.desc && <div className="sub clamp">{x.desc}</div>}
@@ -1354,11 +1436,10 @@ function Shortents({ startJob, pickTopic, engine }) {
                   {x.similar && <div className="warn-line">비슷한 글이 있어요: {x.similar.title}</div>}
                 </td>
                 <td style={{ width: 120 }}>{x.job ? <Status status={x.job.status} /> : null}{x.job && <div className="sub">{JOB_STATE[x.job.status]}</div>}</td>
-                <td style={{ width: 330 }}>
+                <td style={{ width: 230 }}>
                   <div className="actions">
-                    <a className="btn" href={x.linkUrl} target="_blank" rel="noreferrer">네이버에서 보기</a>
-                    <button className="btn" onClick={() => pickTopic(x.title, '', x)}>글 생성하기로</button>
-                    <Action primary={!x.job} run={() => write(x)}>{x.job ? '다시 쓰기' : '이걸로 글쓰기'}</Action>
+                    <button className="btn" onClick={() => pickTopic(x.title, '', x)}>더 넣고 쓰기</button>
+                    <Action primary={!x.job} run={() => write(x)}>{x.job ? '다시 쓰기' : '바로 쓰기'}</Action>
                   </div>
                 </td>
               </tr>
@@ -1370,12 +1451,26 @@ function Shortents({ startJob, pickTopic, engine }) {
   );
 }
 
+// ---- 블로그 → 주제 찾기: 핫 키워드 / 숏텐츠를 탭으로 ----
+function Topics({ startJob, pickTopic, engine, go, initialTab }) {
+  const [tab, setTab] = useSticky('topics-tab', initialTab || 'hot');
+  useEffect(() => { if (initialTab) setTab(initialTab); }, [initialTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tabs = (
+    <div className="segment shorts-tabs" role="tablist" aria-label="주제 출처" style={{ marginBottom: 16 }}>
+      {[['hot', '핫 키워드'], ['shortents', '숏텐츠']].map(([id, name]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{name}</button>)}
+    </div>
+  );
+  return tab === 'shortents'
+    ? <Shortents startJob={startJob} pickTopic={pickTopic} engine={engine} tabs={tabs} />
+    : <HotKeywords startJob={startJob} pickTopic={pickTopic} engine={engine} go={go} tabs={tabs} />;
+}
+
 // ---- 핫 키워드: 어드바이저 트렌드 > 주제별 인기유입검색어(어제 기준) ----
 const Change = ({ value }) => (value == null ? <span className="pill new">NEW</span>
   : value > 0 ? <span className="chg up">▲{value}</span> : value < 0 ? <span className="chg down">▼{-value}</span> : <span className="chg">-</span>);
 const searchUrl = (q) => `https://search.naver.com/search.naver?query=${encodeURIComponent(q)}`;
 
-function HotKeywords({ startJob, pickTopic, engine, go }) {
+function HotKeywords({ startJob, pickTopic, engine, go, tabs }) {
   const dialog = useDialog();
   const [data, load] = useApiData('/api/hotkeywords');
   const [cat, setCat] = useSticky('hot-cat', 'all');
@@ -1394,21 +1489,22 @@ function HotKeywords({ startJob, pickTopic, engine, go }) {
     const ok = await dialog.confirm({
       title: '이 검색어로 글을 쓸까요?',
       message: `「${k.query}」 (${k.category} ${k.rank}위)
-검색어를 주제로 백그라운드에서 씁니다. 이 화면에 그대로 있으면서 줄마다 진행 상태가 보이고, 다 쓰면 글 목록에서 임시저장할 수 있습니다.`,
+검색어를 주제로 백그라운드에서 씁니다. 이 화면에 그대로 있으면서 줄마다 진행 상태가 보이고, 다 쓰면 기본 네이버 계정에 임시저장까지 합니다(발행은 하지 않음).`,
       ok: '글쓰기 시작'
     });
     if (!ok) return;
-    await startJob({ type: 'write', topic: k.query, category: '', notes: `네이버 어드바이저 주제별 인기유입검색어 [${k.category}] ${k.rank}위 — 이 검색어로 들어오는 사람이 찾는 내용을 정확히 담아라`, engine, files: [], draft: false, hotKeyword: k.query }, { stay: true });
+    await startJob({ type: 'write', topic: k.query, category: '', notes: `네이버 어드바이저 주제별 인기유입검색어 [${k.category}] ${k.rank}위 — 이 검색어로 들어오는 사람이 찾는 내용을 정확히 담아라`, engine, files: [], draft: true, hotKeyword: k.query }, { stay: true });
     setTimeout(load, 800);
   };
 
   return (
     <>
-      <Head title="핫 키워드" desc={data?.date
+      <Head title="주제 찾기" desc={data?.date
         ? `${data.date} 하루 기준 · ${clock(data.fetchedAt)}에 받음 · 로그인돼 있으면 6시간마다 자동`
         : '크리에이터 어드바이저 주제별 인기유입검색어를 받아 둡니다'}>
         <Action loading track="hot-refresh" busy={refreshing} run={() => post('/api/hotkeywords/refresh')}>지금 새로고침</Action>
       </Head>
+      {tabs}
       {data && !data.loggedIn && (
         <p className="note" style={{ marginBottom: 14 }}>기본 네이버 계정의 로그인이 필요합니다. <a href="#" onClick={(e) => { e.preventDefault(); go('settings'); }}>설정 → 계정 관리</a>에서 로그인한 뒤 새로고침하세요.</p>
       )}
@@ -1424,19 +1520,18 @@ function HotKeywords({ startJob, pickTopic, engine, go }) {
         </div>
         {rows.length ? (
           <table>
-            <thead><tr><th style={{ width: 110 }}>주제</th><th style={{ width: 50 }}>순위</th><th>검색어</th><th style={{ width: 70 }}>변동</th><th style={{ width: 110 }} /><th style={{ width: 330 }} /></tr></thead>
+            <thead><tr><th style={{ width: 110 }}>주제</th><th style={{ width: 50 }}>순위</th><th>검색어</th><th style={{ width: 70 }}>변동</th><th style={{ width: 110 }} /><th style={{ width: 230 }} /></tr></thead>
             <tbody>{rows.map((k) => (
               <tr key={`${k.category}-${k.query}`}>
                 <td><span className="cat">{k.category}</span></td>
                 <td className="muted">{k.rank}</td>
-                <td><div className="title-cell">{k.query}</div>{k.similar && <div className="warn-line">비슷한 글이 있어요: {k.similar.title}</div>}</td>
+                <td><div className="title-cell"><a className="plain-link" href={searchUrl(k.query)} target="_blank" rel="noreferrer" title="네이버에서 검색해 보기">{k.query}</a></div>{k.similar && <div className="warn-line">비슷한 글이 있어요: {k.similar.title}</div>}</td>
                 <td><Change value={k.change} /></td>
                 <td>{k.job && <><Status status={k.job.status} /><div className="sub">{JOB_STATE[k.job.status]}</div></>}</td>
                 <td>
                   <div className="actions">
-                    <a className="btn" href={searchUrl(k.query)} target="_blank" rel="noreferrer">검색해 보기</a>
-                    <button className="btn" onClick={() => pickTopic(k.query)}>글 생성하기로</button>
-                    <Action primary={!k.job} run={() => write(k)}>{k.job ? '다시 쓰기' : '이걸로 글쓰기'}</Action>
+                    <button className="btn" onClick={() => pickTopic(k.query)}>더 넣고 쓰기</button>
+                    <Action primary={!k.job} run={() => write(k)}>{k.job ? '다시 쓰기' : '바로 쓰기'}</Action>
                   </div>
                 </td>
               </tr>
@@ -1470,7 +1565,7 @@ const SPLASH = {
 
 // 자동화 메뉴마다 하루 첫 진입에 한 번 띄우는 소개 화면. 날짜(이 PC 기준)가 바뀌면 다시 뜬다.
 // 마지막 블록이 끼워지고 1초 뒤 저절로 닫혀 본 화면이 보인다
-function Splash({ id }) {
+function Splash({ id, force }) {
   const s = SPLASH[id];
   const key = `splash-${id}`;
   const today = new Date().toLocaleDateString('sv'); // YYYY-MM-DD, 00시에 바뀐다
@@ -1479,8 +1574,8 @@ function Splash({ id }) {
   useEffect(() => {
     let seen = null;
     try { seen = localStorage.getItem(key); } catch { /* 무시 */ }
-    if (seen !== today) setPhase('in');
-  }, [key, today]);
+    if (force || seen !== today) setPhase('in');
+  }, [key, today, force]);
   const close = useCallback(() => {
     try { localStorage.setItem(key, today); } catch { /* 무시 */ }
     setPhase('out');
@@ -1612,22 +1707,36 @@ function AutoShorts({ jobs, startJob, go, config, reload }) {
   const [cats, setCats] = useSticky('auto-cats', ['comedy', 'talkshow']);
   const [per, setPer] = useSticky('auto-per', 1);
   const [length, setLength] = useSticky('auto-length', 'normal');
+  const [ai, setAi] = useSticky('shorts-ai', 'claude');
+  const [gptKinds, setGptKinds] = useSticky('auto-gpt-kinds', ['ssul']);
   const [key, setKey] = useState(null);
   useEffect(() => { load(); }, [load]);
   const running = jobs.find((j) => j.type === 'autoshorts' && j.status === 'running');
   const recent = jobs.filter((j) => j.type === 'autoshorts').slice(0, 5);
   const toggle = (id) => setCats((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const toggleGpt = (id) => setGptKinds((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const gpt = ai === 'gpt';
+  const count = gpt ? gptKinds.length : cats.length;
   const run = async () => {
-    if (!cats.length) throw new Error('분야를 하나 이상 골라 주세요');
-    await startJob({ type: 'autoshorts', cats, per, length }, { stay: true });
+    if (!count) throw new Error(gpt ? '종류를 하나 이상 골라 주세요' : '분야를 하나 이상 골라 주세요');
+    await startJob(gpt ? { type: 'autoshorts', ai: 'gpt', kinds: gptKinds, per, length } : { type: 'autoshorts', cats, per, length }, { stay: true });
   };
   const saveKey = async () => { await post('/api/config', { youtubeKey: (key ?? '').trim() }); setKey(null); await reload(); await load(); await dialog.alert(key?.trim() ? 'YouTube API 키를 저장했습니다' : 'YouTube API 키를 지웠습니다. 검색으로 찾습니다', '쇼츠 자동화'); };
-  const groups = [['viral', '② 해외 재밌는 영상'], ['celeb', '① 연예인 핫']];
+  const groups = [['celeb', '연예인 핫'], ['viral', '해외 재밌는 영상']];
   return (
     <>
-      <Head title="쇼츠 자동화" desc="분야를 고르고 '지금 만들기'를 누르면 요즘 뜨는 영상을 찾아 숏폼을 만들어 둡니다. 다 만들면 숏폼 메뉴 목록에서 보고 직접 올리면 됩니다" />
+      <Head title="자동 만들기" desc="고르고 '지금 만들기'를 누르면 요즘 뜨는 영상·화제를 찾아 숏폼을 만들어 둡니다. 다 만들면 '만든 영상'에서 보고 직접 올리면 됩니다" />
+      <AiToggle value={ai} onChange={setAi} />
       <section className="panel">
-        {groups.map(([kind, label]) => (
+        {gpt && <div className="field"><span>만들 종류</span>
+          <div className="pickchips">
+            {[['ssul', '썰'], ['topic', '주제·정보'], ['character', '캐릭터']].map(([id, name]) => (
+              <button key={id} type="button" className={`pickchip${gptKinds.includes(id) ? ' on' : ''}`} aria-pressed={gptKinds.includes(id)} onClick={() => toggleGpt(id)}>{name}</button>
+            ))}
+          </div>
+          <small>핫 키워드·숏텐츠에 모아 둔 요즘 화제에서 조회수 잘 나올 주제를 AI가 골라, 겹치지 않게 차례로 만듭니다. 캐릭터는 포즈 승인이 끝나 있어야 합니다.</small>
+        </div>}
+        {!gpt && groups.map(([kind, label]) => (
           <div className="field" key={kind}><span>{label}</span>
             <div className="pickchips">
               {Object.entries(info?.cats || {}).filter(([, c]) => c.kind === kind).map(([id, c]) => (
@@ -1637,7 +1746,7 @@ function AutoShorts({ jobs, startJob, go, config, reload }) {
           </div>
         ))}
         <div className="grid2">
-          <label className="field"><span>분야마다 몇 편</span>
+          <label className="field"><span>{gpt ? '종류마다 몇 편' : '분야마다 몇 편'}</span>
             <select value={per} onChange={(e) => setPer(Number(e.target.value))}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}편</option>)}</select>
           </label>
           <label className="field"><span>길이</span>
@@ -1646,7 +1755,7 @@ function AutoShorts({ jobs, startJob, go, config, reload }) {
         </div>
         <div className="row" style={{ gap: 10, alignItems: 'center' }}>
           <Action primary big loading busy={Boolean(running)} run={run}>지금 만들기</Action>
-          <span className="muted">{running ? `만드는 중 — 완성 ${running.result?.made?.length || 0}편` : `골라 둔 분야 ${cats.length}개 · 예상 ${cats.length * per}편 (한 편에 몇 분씩, 차례로 만듭니다)`}</span>
+          <span className="muted">{running ? `만드는 중 — 완성 ${running.result?.made?.length || 0}편` : `골라 둔 ${gpt ? '종류' : '분야'} ${count}개 · 예상 ${count * per}편 (한 편에 ${gpt ? '10분 안팎' : '몇 분'}씩, 차례로 만듭니다)`}</span>
         </div>
       </section>
       <section className="panel">
@@ -1659,11 +1768,11 @@ function AutoShorts({ jobs, startJob, go, config, reload }) {
           </ul>
         ) : <p className="muted">아직 없습니다.</p>}
         <div className="row" style={{ gap: 8, marginTop: 10 }}>
-          <button className="btn" onClick={() => go('shortform')}>만든 숏폼 보러 가기</button>
+          <button className="btn" onClick={() => go('shortlist')}>만든 영상 보기</button>
           <button className="btn" onClick={() => go('jobs')}>작업 로그</button>
         </div>
       </section>
-      <section className="panel">
+      {!gpt && <section className="panel">
         <h2 className="panel-title">찾는 곳</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           {info?.hasKey ? 'YouTube API 키가 있어 유튜브 공식 인기 차트에서 먼저 찾고, 모자라면 이번 주 업로드 검색으로 채웁니다.' : 'API 키 없이 이번 주 업로드 검색(조회수 순)으로 찾습니다. 키를 넣으면 유튜브 공식 인기 차트도 씁니다(선택).'}
@@ -1674,26 +1783,25 @@ function AutoShorts({ jobs, startJob, go, config, reload }) {
           <small>이 PC의 config.json에만 저장됩니다. 비우고 저장하면 지웁니다</small>
         </label>
         <Action run={saveKey}>키 저장</Action>
-      </section>
+      </section>}
     </>
   );
 }
 
 // 캐릭터 숏폼 3. 영상 만들기: 주제 + 형식 + 길이 → 대본·배경·목소리·무대(작업 'character')
-function CharMake({ data, startJob, approved }) {
+function CharMake({ data, startJob, approved, top }) {
   const [form, setForm] = useSticky('char-make', { topic: '', format: 'tuk', length: 'normal', notes: '' });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const ok = approved.includes('idle') && approved.length >= 4;
   const fmt = data.formats?.[form.format];
   const run = async () => {
-    if (!form.topic.trim()) throw new Error('주제를 입력해 주세요');
     await startJob({ type: 'character', topic: form.topic.trim(), format: form.format, length: form.length, notes: form.notes.trim() }, { stay: true });
   };
   return (
     <section className="panel">
-      <h2 className="panel-title">3. 영상 만들기</h2>
+      <h2 className="panel-title">{top ? '영상 만들기' : '3. 영상 만들기'}</h2>
       {!ok ? <p className="muted">포즈를 4개 이상(기본 포함) 승인하면 열립니다.</p> : <>
-        <label className="field"><span>주제</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder={fmt?.example ? `예: ${fmt.example}` : '예: 월급날 국룰'} /></label>
+        <label className="field"><span>주제</span><input className="topic" value={form.topic} onChange={set('topic')} placeholder={`비워 두면 요즘 화제에서 골라 만듭니다${fmt?.example ? ` · 예: ${fmt.example}` : ''}`} /></label>
         <div className="grid2">
           <label className="field"><span>형식</span>
             <select value={form.format} onChange={set('format')}>{Object.entries(data.formats || {}).map(([id, f]) => <option key={id} value={id}>{f.name}</option>)}</select>
@@ -1714,15 +1822,16 @@ function CharMake({ data, startJob, approved }) {
 }
 
 // 캐릭터 숏폼(docs/캐릭터-숏폼-설계.md). 1단계: 캐릭터 정하기 + 포즈 세트 만들기·검수. 영상 만들기는 포즈 승인 뒤 다음 단계에서 붙인다
-function Character({ jobs, startJob, go }) {
+function Character({ jobs, startJob, go, embedded }) {
   const dialog = useDialog();
   const [data, load] = useApiData('/api/character');
   const [form, setForm] = useState(null);
   const running = jobs.find((j) => j.type === 'poses' && j.status === 'running');
   useEffect(() => { load(); }, [load, running?.id, running?.result?.made?.length]);
   useEffect(() => { if (data && !form) setForm({ name: data.name || '', ref: data.ref || '', notes: data.notes || '' }); }, [data, form]);
-  if (!data) return <Head title="캐릭터 숏폼" desc="불러오는 중" />;
-  if (!data.root) return (<><Head title="캐릭터 숏폼" /><p className="note">작업 폴더가 없습니다. <a href="#" onClick={(e) => { e.preventDefault(); go('settings'); }}>설정</a>에서 블로그 작업 폴더를 정해 주세요.</p></>);
+  const head = (desc) => (embedded ? (desc ? <p className="muted">{desc}</p> : null) : <Head title="캐릭터 숏폼" desc={desc} />);
+  if (!data) return head('불러오는 중');
+  if (!data.root) return (<>{head()}<p className="note">작업 폴더가 없습니다. <a href="#" onClick={(e) => { e.preventDefault(); go('settings'); }}>설정</a>에서 블로그 작업 폴더를 정해 주세요.</p></>);
   const img = (file, at) => `/api/image?path=${encodeURIComponent(file)}&t=${at || 0}`;
   const poseFile = (id) => `${data.dir}\\poses\\${id}.png`;
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -1733,9 +1842,11 @@ function Character({ jobs, startJob, go }) {
   const approved = made.filter((id) => data.poses[id].approved);
   const missing = data.poseList.map(([id]) => id).filter((id) => !made.includes(id));
   const ready = data.name && data.ref;
-  return (
+  // 포즈를 갖춰 영상을 만들 수 있으면 '영상 만들기'를 맨 위에 두고, 캐릭터·포즈 관리는 접어 둔다
+  const canMake = Boolean(ready) && approved.includes('idle') && approved.length >= 4;
+  const intro = head("블로그 캐릭터가 나오는 짧은 영상('○○ 특' 같은 형식)을 만듭니다. 먼저 캐릭터 포즈 그림을 한 번 만들어 두고, 영상마다 그 그림을 다시 씁니다");
+  const setup = (
     <>
-      <Head title="캐릭터 숏폼" desc="블로그 캐릭터가 나오는 짧은 영상('○○ 특' 같은 형식)을 만듭니다. 먼저 캐릭터 포즈 그림을 한 번 만들어 두고, 영상마다 그 그림을 다시 씁니다" />
       <section className="panel">
         <h2 className="panel-title">1. 캐릭터 정하기</h2>
         <div className="grid2">
@@ -1771,20 +1882,129 @@ function Character({ jobs, startJob, go }) {
           })}
         </div>
       </section>
+    </>
+  );
+  return canMake ? (
+    <>
+      {intro}
+      <CharMake data={data} startJob={startJob} approved={approved} top />
+      <details className="voice look">
+        <summary>캐릭터·포즈 관리 <span className="muted">· {data.name} · 포즈 승인 {approved.length} / {data.poseList.length}</span></summary>
+        <div style={{ marginTop: 14 }}>{setup}</div>
+      </details>
+    </>
+  ) : (
+    <>
+      {intro}
+      {setup}
       <CharMake data={data} startJob={startJob} approved={approved} />
-      {approved.length > 0 && <ShortBoard startJob={startJob} jobs={jobs} kind="character" />}
     </>
   );
 }
 
-function Soon({ id, title, desc, children }) {
+// 도구 → mp3·mp4 추출기: 유튜브 주소 → 소리(mp3) 또는 영상(mp4)을 이 PC(data\downloads)에 받아 둔다.
+// 같은 와이파이의 휴대폰에서도 열어 '내 기기에 저장'으로 받는다(브라우저 다운로드)
+const fmtSize = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)}GB` : `${Math.max(0.1, n / 1e6).toFixed(1)}MB`);
+function Extractor({ jobs, startJob }) {
+  const dialog = useDialog();
+  const [url, setUrl] = useState('');
+  const [format, setFormat] = useSticky('extract-format', 'mp3');
+  const [list, load] = useApiData('/api/extracts');
+  const [playing, setPlaying] = useState(null);
+  const mine = jobs.filter((j) => j.type === 'extract');
+  const running = mine.filter((j) => j.status === 'running');
+  const failed = mine.filter((j) => j.status === 'failed').slice(0, 3);
+  const finished = mine.filter((j) => j.status !== 'running').length;
+  useEffect(() => { load(); }, [load, finished]);
+  const start = async () => {
+    if (!url.trim()) throw new Error('유튜브 주소를 넣어 주세요');
+    await startJob({ type: 'extract', url: url.trim(), format }, { stay: true });
+    setUrl('');
+  };
+  const remove = async (x) => {
+    const ok = await dialog.confirm({ title: '이 파일을 지울까요?', message: `「${x.title}」\n이 PC의 휴지통으로 옮깁니다.`, ok: '휴지통으로' });
+    if (!ok) return;
+    await post('/api/extracts/delete', { id: x.id });
+    if (playing === x.id) setPlaying(null);
+    await load();
+  };
+  const fileUrl = (x, dl) => `/api/extracts/file?id=${encodeURIComponent(x.id)}${dl ? '&dl=1' : ''}`;
   return (
     <>
-      <Splash id={id} />
-      <Head title={title} desc={desc} />
-      <section className="panel">
-        <Empty title="준비 중입니다">{children}</Empty>
+      <Head title="mp3·mp4 추출기" desc="유튜브 주소를 넣으면 소리(mp3)나 영상(mp4)으로 받아 둡니다. 휴대폰에서 열어도 '내 기기에 저장'으로 받을 수 있습니다" />
+      <section className="panel" data-tour="extract-form">
+        <label className="field"><span>유튜브 주소</span>
+          <input className="topic" value={url} onChange={(e) => setUrl(e.target.value)} inputMode="url" autoComplete="off" placeholder="https://youtu.be/...  또는  youtube.com/shorts/..." />
+        </label>
+        <div className="field"><span>형식</span>
+          <div className="segment" role="group" aria-label="형식">
+            {[['mp3', 'mp3 · 소리만'], ['mp4', 'mp4 · 영상']].map(([id, name]) => <button key={id} type="button" className={format === id ? 'on' : ''} onClick={() => setFormat(id)}>{name}</button>)}
+          </div>
+          <small>{format === 'mp3' ? '가장 좋은 음질로 소리만 받습니다' : '휴대폰에서도 열리는 형식(H.264, 1080p까지)으로 받습니다'}</small>
+        </div>
+        <div className="row" style={{ marginTop: 6 }}>
+          <Action primary big run={start}>추출하기</Action>
+          <span className="muted">긴 영상은 몇 분 걸립니다. 내 영상이나 쓸 권한이 있는 영상만 받아 주세요.</span>
+        </div>
       </section>
+      {(running.length > 0 || failed.length > 0) && (
+        <section className="panel">
+          {running.map((j) => <div key={j.id} className="row extract-job"><span className="status running"><span className="spin" aria-hidden="true" />받는 중</span><span className="pill soon">{j.input.format}</span><span className="muted clamp">{j.input.url}</span></div>)}
+          {failed.map((j) => <div key={j.id} className="row extract-job"><Status status="failed" /><span className="pill soon">{j.input.format}</span><span className="muted clamp">{j.error}</span></div>)}
+        </section>
+      )}
+      <section className="panel" data-tour="extract-list">
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <h2 className="panel-title" style={{ margin: 0 }}>받은 파일 {list?.length ? <span className="muted" style={{ fontWeight: 400, fontSize: 14 }}>{list.length}개</span> : null}</h2>
+          <Action run={() => post('/api/extracts/open', {})}>PC에서 폴더 열기</Action>
+        </div>
+        {list?.length ? (
+          <div className="extract-list">
+            {list.map((x) => (
+              <div key={x.id} className="extract-item">
+                <div className="info">
+                  <div className="title-cell">{x.title}</div>
+                  <div className="sub"><span className="pill soon">{x.format}</span> {fmtSize(x.size)} · {when(x.at)}</div>
+                </div>
+                <div className="actions-row">
+                  <a className="btn primary" href={fileUrl(x, true)} download={x.file}>내 기기에 저장</a>
+                  <button type="button" className="btn" onClick={() => setPlaying(playing === x.id ? null : x.id)}>{playing === x.id ? '닫기' : x.format === 'mp3' ? '들어 보기' : '보기'}</button>
+                  <Action danger run={() => remove(x)}>삭제</Action>
+                </div>
+                {playing === x.id && (x.format === 'mp3'
+                  ? <audio className="extract-player" controls autoPlay src={fileUrl(x)} />
+                  : <video className="extract-player" controls autoPlay playsInline src={fileUrl(x)} />)}
+              </div>
+            ))}
+          </div>
+        ) : <Empty title={list ? '아직 받은 파일이 없습니다' : '불러오는 중'}>{list ? '위에 유튜브 주소를 넣고 추출하기를 눌러 보세요.' : ''}</Empty>}
+      </section>
+    </>
+  );
+}
+
+// 곧 나와요: 준비 중인 자동화 셋을 한 화면에. 카드를 누르면 '돌아가면 이런 모습' 미리보기
+const SOON = [
+  ['auto', '글 자동화', '정해진 시간마다 숏텐츠·핫 키워드에서 좋은 주제를 골라 글까지 자동으로 만듭니다. 지금은 주제 찾기의 "바로 쓰기"로 한 편씩 만들 수 있습니다.'],
+  ['insta', '인스타 자동화', '만든 글·숏폼을 인스타그램 게시물·릴스로 바꿔 올립니다.'],
+  ['threads', '스레드 자동화', '만든 글을 스레드(Threads)에 맞는 짧은 글로 바꿔 올립니다.']
+];
+function Soon() {
+  const [show, setShow] = useState(null);
+  return (
+    <>
+      <Head title="곧 나와요" desc="준비 중인 자동화 기능입니다. 카드를 누르면 완성되면 어떤 모습일지 미리 볼 수 있습니다" />
+      <div className="soon-grid">
+        {SOON.map(([id, name, desc]) => (
+          <button key={id} type="button" className="panel soon-card" onClick={() => setShow({ id, n: Date.now() })}>
+            <Emoji name={SPLASH[id].emoji} size={36} />
+            <b>{name}</b>
+            <span className="muted">{desc}</span>
+            <span className="pill soon">준비 중</span>
+          </button>
+        ))}
+      </div>
+      {show && <Splash key={show.n} id={show.id} force />}
     </>
   );
 }
